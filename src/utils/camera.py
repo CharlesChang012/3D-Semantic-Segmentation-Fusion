@@ -7,6 +7,8 @@ import torch.nn.functional as F
 from torchvision import transforms
 
 login(token="YOUR_HUGGING_FAECE_TOKEN_HERE")
+DINOV3_PATH = "/home/pohsun/dinov3"
+DINOV3_WEIGHTS = "/home/pohsun/dinov3/dinov3_vits16_pretrain_lvd1689m-08c60483.pth"
 
 def make_transform(resize_size: int = 256):
     to_tensor = v2.ToImage()
@@ -25,7 +27,7 @@ class ImageFeatureEncoder:
             self.model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
             self.resize_size = 224
         else:
-            self.model = torch.hub.load("/home/pohsun/dinov3", 'dinov3_vits16', source='local', weights="/home/pohsun/dinov3/dinov3_vits16_pretrain_lvd1689m-08c60483.pth")
+            self.model = torch.hub.load(DINOV3_PATH, 'dinov3_vits16', source='local', weights=DINOV3_WEIGHTS)
             self.resize_size = 256
         self.model.eval()
         self.transform = make_transform(resize_size=self.resize_size)
