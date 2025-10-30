@@ -1,7 +1,10 @@
 [submodule "dinov3"]
 	path = dinov3
 	url = https://github.com/facebookresearch/dinov3.git
+<<<<<<< HEAD
 
 [submodule "PTv3"]
 	path = PointTransformerV3
 	url = https://github.com/Pointcept/PointTransformerV3.git
+=======
+>>>>>>> 1010f55a20253291e37c927433d660dcfc947d54

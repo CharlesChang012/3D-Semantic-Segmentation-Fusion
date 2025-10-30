@@ -5,10 +5,13 @@ import torchvision
 from torchvision.transforms import v2
 import torch.nn.functional as F
 from torchvision import transforms
+import os
 
 login(token="YOUR_HUGGING_FAECE_TOKEN_HERE")
-DINOV3_PATH = "/home/pohsun/dinov3"
-DINOV3_WEIGHTS = "/home/pohsun/dinov3/dinov3_vits16_pretrain_lvd1689m-08c60483.pth"
+
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+DINOV3_PATH = os.path.join(REPO_ROOT, 'dinov3')
+DINOV3_WEIGHTS = os.path.join(DINOV3_PATH, 'dinov3_vits16_pretrain_lvd1689m-08c60483.pth')
 
 def make_transform(resize_size: int = 256):
     to_tensor = v2.ToImage()
@@ -26,13 +29,15 @@ class ImageFeatureEncoder:
         if model_name == "dinov2":
             self.model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
             self.resize_size = 224
+            self.patch_size = 14
         else:
             self.model = torch.hub.load(DINOV3_PATH, 'dinov3_vits16', source='local', weights=DINOV3_WEIGHTS)
             self.resize_size = 256
+            self.patch_size = 16
         self.model.eval()
         self.transform = make_transform(resize_size=self.resize_size)
 
-    def __call__(self, images):
+    def encode(self, images):
         features = []
         with torch.inference_mode():
             with torch.autocast('cuda', dtype=torch.bfloat16):
@@ -43,3 +48,9 @@ class ImageFeatureEncoder:
                     features.append(output)
 
         return torch.stack(features, dim=0) # (6, M, 384)
+
+    def get_resize_size(self):
+        return self.resize_size
+
+    def get_patch_size(self):
+        return self.patch_size
