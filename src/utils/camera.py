@@ -26,7 +26,7 @@ class ImageFeatureEncoder:
         self.model.eval()
 
 
-    def d(self, images):
+    def __call__(self, images):
         patch_features, global_features = [], []
 
         with torch.inference_mode(), torch.autocast(

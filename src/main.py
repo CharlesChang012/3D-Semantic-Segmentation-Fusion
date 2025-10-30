@@ -1,6 +1,6 @@
 import argparse
 import os
-from utils.camera import ImageFeatureEncoder
+from utils.camera_test import ImageFeatureEncoder
 import torch
 import torchvision
 
@@ -18,11 +18,9 @@ def main():
     # Initialize image feature encoder
     image_encoder = ImageFeatureEncoder(model_name="dinov3")
     # Encode image features
-    image_features = image_encoder(images_list)
-    print(image_features.shape)
-    
-
-
+    image_patch_tokens = image_encoder(images_list)
+    print("patch feature:", image_patch_tokens["patch_features"].shape)
+    print("global features:", image_patch_tokens["global_features"].shape)
 
 if __name__ == "__main__":
     main()
