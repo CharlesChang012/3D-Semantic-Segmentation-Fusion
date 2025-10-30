@@ -8,7 +8,7 @@ By leveraging DINOv3’s enhanced visual embeddings and zero-shot capabilities, 
 
 
 ## Key Highlights
-- Fusion of **LiDAR (PTv3)** and **image (DINOv3 or DINOv2)** features
+- Fusion of **LiDAR (PTv3)** [5] and **image (DINOv3 or DINOv2)** features
 - Evaluated on **nuScenes-Lidarseg** for real-world driving scenes  
 - Includes **PointTransformerV3** integration and flexible feature fusion design
 
@@ -29,7 +29,7 @@ $ git submodule update --init --recursive
 
 ---
 
-### 2. Launch an Interactive GPU Session if using UMich HPC (Skip to [Step 4](#4-create-the-conda-environment) if using local machine)
+### 2. Launch an Interactive GPU Session if using UMich HPC [6] (Skip to [Step 4](#4-create-the-conda-environment) if using local machine)
 Start a GPU session (see [UMich documentation](https://documentation.its.umich.edu/node/5078)):  
 ```bash
 $ salloc --account=<account> \   
@@ -82,5 +82,9 @@ python setup.py install
 ---
 
 ## 📚 References
-- [PointTransformerV3](https://github.com/Pointcept/PointTransformerV3)
-- [UMich ARC Documentation](https://documentation.its.umich.edu/node/5078)
+[1] Stanford 3D Semantic Segmentation Framework  
+[2] Oquab et al., *DINOv3: Self-Supervised Vision Transformers with Masked Image Modeling*, Meta AI, 2023  
+[3] Oquab et al., *DINOv2: Learning Robust Visual Features without Supervision*, Meta AI, 2023  
+[4] Caesar et al., *nuScenes: A Multimodal Dataset for Autonomous Driving*, CVPR 2020  
+[5] Wu et al., *Point Transformer V3: Simplicity, Efficiency, and Performance in Point Cloud Transformers*, arXiv 2024  
+[6] [UMich ARC Documentation](https://documentation.its.umich.edu/node/5078)
