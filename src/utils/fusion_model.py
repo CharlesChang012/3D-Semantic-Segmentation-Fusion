@@ -8,26 +8,6 @@ from typing import List, Dict, Any, Sequence, Tuple
 import copy
 import os
 
-
-# -------------------------
-# 1. Dataset
-# -------------------------
-class FusionDataset(Dataset):
-    def __init__(self, data):
-        self.data = data
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, idx):
-        sample = self.data[idx]
-
-        return (
-            sample["images"],           # (6, C, H, W)
-            sample["lidar_points"],     # (P, 4)
-            sample["labels"]            # (P,)  
-        )
-
 # -------------------------
 # 2. Projector
 # -------------------------
@@ -131,37 +111,53 @@ def train_model(dataloader, image_encoder, pcd_encoder, model, optimizer, criter
 
             running_loss = 0.0
             running_corrects = 0
+            total_points = 0
 
-            for images, lidar_points, labels in dataloader:
-                images = images.to(device)
-                lidar_points = lidar_points.to(device)
-                labels = labels.to(device)
+            for images, lidar_points, labels, mask in dataloader:
+                # Move to device
+                images = images.to(device)           # (B, 6, C, H, W)
+                lidar_points = lidar_points.to(device)  # (B, max_V, 3)
+                labels = labels.to(device)           # (B, max_V)
+                mask = mask.to(device)               # (B, max_V)
 
-                with torch.no_grad():
-                    patch_tokens = image_encoder(images)  # (6, M, 384)
-                    voxel_features, voxel_raw, voxel_coords = pcd_encoder(lidar_points) # voxel_features: (V, 64), voxel_raw: (V, 4), voxel_coords: (V, 3)
+                B, V, _ = lidar_points.shape
+
+                # Extract features
+                with torch.set_grad_enabled(phase == 'train'):
+                    # Image encoder: flatten batch and views
+                    # Option 1: process all views separately
+                    patch_tokens_list = []
+                    for v in range(images.shape[1]):
+                        patch_tokens_list.append(image_encoder(images[:, v]))  # (B, M, patch_dim)
+                    patch_tokens = torch.stack(patch_tokens_list, dim=1)  # (B, 6, M, patch_dim)
+
+                    # Point cloud encoder
+                    voxel_features, voxel_raw, voxel_coords = pcd_encoder(lidar_points)  # (B,V,feat_dim), (B,V,4), (B,V,3)
+
+                    # Forward pass through fusion model
+                    outputs = model(patch_tokens, voxel_features, voxel_coords, model.K, model.Rt)  # (B, V, num_classes)
+
+                    # Compute loss ignoring padded points
+                    outputs_flat = outputs.view(-1, outputs.shape[-1])  # (B*V, num_classes)
+                    labels_flat = labels.view(-1)                        # (B*V,)
+                    mask_flat = mask.view(-1)                            # (B*V,)
+                    outputs_masked = outputs_flat[mask_flat]
+                    labels_masked = labels_flat[mask_flat]
+
+                    loss = criterion(outputs_masked, labels_masked)
+                    _, preds = torch.max(outputs_masked, 1)
 
                 if phase == 'train':
-                    outputs_v = model(voxel_features, patch_tokens, voxel_coords, model.K, model.Rt)
-                    outputs_p = v2p(outputs_v)  # TODO: define v2p()
-                    _, preds = torch.max(outputs_p, 1)
-                    loss = criterion(outputs_p, labels)
-
                     optimizer.zero_grad()
                     loss.backward()
                     optimizer.step()
-                else:
-                    with torch.no_grad():
-                        outputs_v = model(patch_tokens, voxel_features, voxel_coords, model.K, model.Rt)
-                        outputs_p = v2p(outputs_v)
-                        _, preds = torch.max(outputs_p, 1)
-                        loss = criterion(outputs_p, labels)
 
-                running_loss += loss.item() * voxel_features.size(0)
-                running_corrects += torch.sum(preds == labels.data)
+                running_loss += loss.item() * labels_masked.size(0)
+                running_corrects += torch.sum(preds == labels_masked)
+                total_points += labels_masked.size(0)
 
-            epoch_loss = running_loss / len(dataloader.dataset)
-            epoch_acc = running_corrects.double() / len(dataloader.dataset)
+            epoch_loss = running_loss / total_points
+            epoch_acc = running_corrects.double() / total_points
             print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
 
             if phase == 'val' and epoch_acc > best_acc:
@@ -179,47 +175,3 @@ def train_model(dataloader, image_encoder, pcd_encoder, model, optimizer, criter
     model.load_state_dict(best_model_wts)
     return tr_acc_history, val_acc_history
 
-
-# -------------------------
-# 5. Dataloaders
-# -------------------------
-def get_fusion_dataloaders(data_splits: Dict[str, List[Dict[str, Any]]],
-                           batch_size: int,
-                           num_workers: int = 2
-                           ):
-
-    def collate_fn(batch: List[Any]):
-        batch_voxel_features = [item[0] for item in batch]
-        batch_patch_tokens = [item[1] for item in batch]
-        batch_voxel_coords = [item[2] for item in batch]
-        batch_labels = [item[3] for item in batch]
-
-        B = len(batch)
-        num_views, M, D = batch_patch_tokens[0].shape
-
-        patch_tokens = torch.stack(batch_patch_tokens, dim=0)
-
-        max_V = max([vf.shape[0] for vf in batch_voxel_features])
-        feat_dim = batch_voxel_features[0].shape[1]
-
-        voxel_feats_padded = torch.zeros((B, max_V, feat_dim), dtype=torch.float32)
-        voxel_coords_padded = torch.zeros((B, max_V, 3), dtype=torch.float32)
-        labels_padded = torch.full((B, max_V), -100, dtype=torch.long)  # ignore_index
-        mask = torch.zeros((B, max_V), dtype=torch.bool)
-
-        for i in range(B):
-            V = batch_voxel_features[i].shape[0]
-            voxel_feats_padded[i, :V] = batch_voxel_features[i]
-            voxel_coords_padded[i, :V] = batch_voxel_coords[i]
-            labels_padded[i, :V] = batch_labels[i]
-            mask[i, :V] = 1
-
-        return voxel_feats_padded, patch_tokens, voxel_coords_padded, labels_padded, mask
-
-    dataloaders = {}
-    for split in data_splits.keys():
-        ds = FusionDataset(data_splits[split])
-        dl = DataLoader(ds, batch_size=batch_size, shuffle=(split=='train'), num_workers=num_workers, collate_fn=collate_fn)
-        dataloaders[split] = dl
-
-    return dataloaders

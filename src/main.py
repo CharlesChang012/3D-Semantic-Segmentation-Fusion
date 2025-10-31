@@ -7,6 +7,8 @@ from utils.camera import ImageFeatureEncoder
 from utils.lidar import LiDARFeatureEncoder
 from utils.fusion_model import FeatureFusionModel, get_fusion_dataloaders, train_model
 from utils.plot import plot_training_history
+from utils.dataloader import fusion_collate_fn
+from torch.utils.data import DataLoader
 
 def main():
 
@@ -16,11 +18,6 @@ def main():
     num_classes = 16
     origin_img_size = (600, 900)
     IMAGE_ENCODER = 'dinov3'
-
-    BATCH_SIZE = 32
-    NUM_EPOCHS = 15
-    LEARNING_RATE = 1e-4
-    NUM_WORKERS = 2
     VOXEL_SIZE = 0.1
 
     # Set device
@@ -30,25 +27,25 @@ def main():
     # ==============================#
     #          Dataset Setup        #
     # ==============================#
-    # Replace this with your actual data split dictionaries
-    # Each sample: {'images': [...], 'lidar_points': ..., 'labels': ...}
-    data_splits = {
-        'train': train_data_list,
-        'val': val_data_list
-    }
+    
+    nuscenes_dataset = nuScenes(config, data_path, imageset='train')
 
-    image_encoder = ImageFeatureEncoder(model_name=IMAGE_ENCODER, device=device)
-    pcd_encoder = LiDARFeatureEncoder(voxel_size=VOXEL_SIZE).to(device)
-
-    dataloaders = get_fusion_dataloaders(
-        data_splits,
-        batch_size=BATCH_SIZE,
-        num_workers=NUM_WORKERS
+    dataloader = DataLoader(
+        nuscenes_dataset,
+        batch_size=config['dataset_params']['train_data_loader']['batch_size'],
+        shuffle=config['dataset_params']['train_data_loader']['shuffle'],
+        num_workers=config['dataset_params']['train_data_loader']['num_workers'],
+        collate_fn=fusion_collate_fn
     )
 
     # ==============================#
     #             Model             #
     # ==============================#
+    # Initialize encoders
+    image_encoder = ImageFeatureEncoder(model_name=IMAGE_ENCODER, device=device)
+    pcd_encoder = LiDARFeatureEncoder(voxel_size=VOXEL_SIZE).to(device)
+
+    # Initialize fusion model
     model = FeatureFusionModel(
         image_encoder=image_encoder,
         pcd_encoder=pcd_encoder,
@@ -64,7 +61,15 @@ def main():
     model.K = intrinsic.to(device)    # torch.tensor(3,3)
     model.Rt = extrinsic.to(device)   # torch.tensor(3,4)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    # Initialize Optimizer
+    if config['train_params']['optimizer'] == 'AdamW':
+        optimizer = torch.optim.AdamW(model.parameters(), lr=config['train_params']['learning_rate'], weight_decay=config['train_params']['weight_decay'])
+    elif config['train_params']['optimizer'] == 'Adam':
+        optimizer = torch.optim.Adam(model.parameters(), lr=config['train_params']['learning_rate'], weight_decay=config['train_params']['weight_decay'])
+    else:
+        optimizer = torch.optim.SGD(model.parameters(), lr=config['train_params']['learning_rate'], momentum=config['train_params']['momentum'])
+
+    # Initialize Loss function
     criterion = nn.CrossEntropyLoss(ignore_index=-100)
 
     # ==============================#

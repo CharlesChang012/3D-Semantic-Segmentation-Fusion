@@ -1,0 +1,41 @@
+# Config format schema number
+format_version: 0.1
+
+debug: True
+
+###################
+## Dataset params
+dataset_params:
+  training_size: 1000
+  dataset_type: "point_image_dataset_nus"
+  pc_dataset_type: "nuScenes"
+  ignore_label: 0
+  label_mapping: "./config/label_mapping/nuscenes.yaml"
+  
+  train_data_loader:
+    data_path: "./dataset/nuscenes/"
+    batch_size: 12
+    shuffle: True
+    num_workers: 4
+
+  val_data_loader:
+    data_path: "./dataset/nuscenes/"
+    batch_size: 12
+    shuffle: False
+    num_workers: 4
+
+
+###################
+## Train params
+train_params:
+  max_num_epochs: 10
+  learning_rate: 0.002
+  optimizer: AdamW # [SGD, Adam, AdamW]
+  lr_scheduler: CosineAnnealingLR  # [StepLR, ReduceLROnPlateau, CosineAnnealingLR, CosineAnnealingWarmRestarts]
+  momentum: 0.9
+  nesterov: True
+  weight_decay: 0.005
+
+  lambda_seg2d: 1
+  lambda_xm: 0.05
+  lambda_lovasz: 1

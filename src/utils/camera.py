@@ -21,7 +21,7 @@ class ImageFeatureEncoder:
         else:
             raise ValueError(f"Unsupported model name: {self.model_name}")
 
-        # Force slow (Python) preprocessor → avoids torch.compiler bug
+        # Preprocessor and model
         self.processor = AutoImageProcessor.from_pretrained(model_id, use_fast=True)
         self.resize_size = self.processor.size["height"]
         self.model = AutoModel.from_pretrained(model_id).to(self.device)
