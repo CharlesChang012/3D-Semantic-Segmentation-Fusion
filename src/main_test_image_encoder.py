@@ -1,6 +1,6 @@
 import argparse
 import os
-from utils.camera_test import ImageFeatureEncoder
+from utils.camera import ImageFeatureEncoder
 import torch
 import torchvision
 
