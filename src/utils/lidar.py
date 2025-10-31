@@ -18,10 +18,10 @@ class LiDARFeatureEncoder(nn.Module):
     Output: (V x 64) tensor  [point-level feature map]
     """
 
-    def __init__(self, voxel_size=0.1, pc_range=[-50, -50, -5, 50, 50, 3]):
+    def __init__(self, config):
         super().__init__()
-        self.voxel_size = voxel_size
-        self.pc_range = pc_range
+        self.voxel_size = config['lidar']['voxel_size']
+        self.pc_range = config['lidar']['point_cloud_range']
         # Load PTv3 backbone from the official repo
         self.ptv3 = PointTransformerV3(in_channels=4)
 

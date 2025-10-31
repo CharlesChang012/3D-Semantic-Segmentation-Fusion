@@ -190,15 +190,15 @@ def fusion_collate_fn(batch):
 
     # Process LiDAR points and labels
     lidar_list = [torch.from_numpy(sample['lidar_points']).float() for sample in batch]  # (B, P, 4)
-    labels_list = [torch.from_numpy(sample['labels']).long() for sample in batch]        # (B, P, 4)
+    labels_list = [torch.from_numpy(sample['labels']).long() for sample in batch]           # (B, P)
 
     max_P = max([l.shape[0] for l in lidar_list])
     pcd_feat_dim = lidar_list[0].shape[1]       # 4
 
     lidar_points_padded = torch.zeros((B, max_P, pcd_feat_dim), dtype=torch.float32)
-    labels_padded = torch.full((B, max_P, pcd_feat_dim), -100, dtype=torch.long)  # ignore_index
+    labels_padded = torch.full((B, max_P), -100, dtype=torch.long)  # ignore_index
     mask = torch.zeros((B, max_P), dtype=torch.bool)
-
+    
     for i in range(B):
         P = lidar_list[i].shape[0]
         lidar_points_padded[i, :P] = lidar_list[i]
