@@ -6,6 +6,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 from nuscenes import NuScenes
 from nuscenes.utils import splits
+from pyquaternion import Quaternion
 
 class nuScenes(Dataset):
     def __init__(self, config, data_path, imageset='train', num_vote=1):
@@ -108,20 +109,46 @@ class nuScenes(Dataset):
         pointsensor = self.nusc.get('sample_data', lidar_sample_token)
         cs_record_lidar = self.nusc.get('calibrated_sensor', pointsensor['calibrated_sensor_token'])
         pose_record_lidar = self.nusc.get('ego_pose', pointsensor['ego_pose_token'])
-        cam = self.nusc.get('sample_data', cam_sample_tokens)
-        cs_record_cam = self.nusc.get('calibrated_sensor', cam['calibrated_sensor_token'])
-        pose_record_cam = self.nusc.get('ego_pose', cam['ego_pose_token'])
+        
+        # calculate camera extrinsics to LiDAR
+        # LiDAR 2 ego transformation
+        R_l = Quaternion(cs_record_lidar['rotation']).rotation_matrix
+        t_l = np.array(cs_record_lidar['translation'])
+        T_lidar_ego = np.eye(4)
+        T_lidar_ego[:3, :3] = R_l
+        T_lidar_ego[:3, 3] = t_l
+        T_lidar_ego_inv = np.linalg.inv(T_lidar_ego)
+
+        cam2lidar_list = []
+        # cs_record_cam = []
+        # pose_record_cam = []
+        for cam_token in cam_sample_tokens:
+            cam = self.nusc.get('sample_data', cam_token)
+            cs_record = self.nusc.get('calibrated_sensor', cam['calibrated_sensor_token'])
+            pose_record = self.nusc.get('ego_pose', cam['ego_pose_token'])
+            # cs_record_cam.append(cs_record)
+            # pose_record_cam.append(pose_record)
+            
+            # Camera 2 ego
+            R_c = Quaternion(cs_record['rotation']).rotation_matrix
+            t_c = np.array(cs_record['translation'])
+            T_cam_ego = np.eye(4)
+            T_cam_ego[:3, :3] = R_c
+            T_cam_ego[:3, 3] = t_c
+            T_cam_lidar = T_lidar_ego_inv @ T_cam_ego        # Camera 2 LiDAR = inv(T_lidar_ego) @ T_cam_ego
+            cam2lidar_list.append(T_cam_lidar)
 
         calib_info = {
-            "lidar2ego_translation": cs_record_lidar['translation'],
-            "lidar2ego_rotation": cs_record_lidar['rotation'],
-            "ego2global_translation_lidar": pose_record_lidar['translation'],
-            "ego2global_rotation_lidar": pose_record_lidar['rotation'],
-            "ego2global_translation_cam": pose_record_cam['translation'],
-            "ego2global_rotation_cam": pose_record_cam['rotation'],
-            "cam2ego_translation": cs_record_cam['translation'],
-            "cam2ego_rotation": cs_record_cam['rotation'],
+            # "lidar2ego_translation": cs_record_lidar['translation'],
+            # "lidar2ego_rotation": cs_record_lidar['rotation'],
+            # "ego2global_translation_lidar": pose_record_lidar['translation'],
+            # "ego2global_rotation_lidar": pose_record_lidar['rotation'],
+            # "ego2global_translation_cam": [pose['translation'] for pose in pose_record_cam],
+            # "ego2global_rotation_cam": [pose['rotation'] for pose in pose_record_cam],
+            # "cam2ego_translation": [cs['translation'] for cs in cs_record_cam],
+            # "cam2ego_rotation": [cs['rotation'] for cs in cs_record_cam],
             "cam_intrinsic": cam_intrinsic,
+            "cam2lidar_extrinsic": cam2lidar_list,
         }
 
         data_dict = {

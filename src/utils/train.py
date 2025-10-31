@@ -50,7 +50,7 @@ def train_model(dataloader, image_encoder, pcd_encoder, model, optimizer, criter
                     voxel_features, voxel_raw, voxel_coords = pcd_encoder(lidar_points)  # (B,V,feat_dim), (B,V,4), (B,V,3)
 
                     # Forward pass through fusion model
-                    outputs = model(patch_tokens, voxel_features, voxel_coords, image_sizes, calib_info['cam_intrinsic'], model.Rt)  # (B, V, num_classes)
+                    outputs = model(patch_tokens, voxel_features, voxel_coords, image_sizes, calib_info['cam_intrinsic'], calib_info['cam2lidar_extrinsic'])  # (B, V, num_classes)
 
                     # Compute loss ignoring padded points
                     outputs_flat = outputs.view(-1, outputs.shape[-1])      # (B*P, num_classes)
