@@ -104,15 +104,15 @@ class nuScenes(Dataset):
             cam_sample_tokens.append(cam_token)
 
         # Use the first camera for calibration (or extend for all cameras if needed)
-        cam_path, boxes_front_cam, cam_intrinsic = self.nusc.get_sample_data(cam_sample_tokens[0])
+        cam_path, boxes_front_cam, cam_intrinsic = self.nusc.get_sample_data(cam_sample_tokens)
         pointsensor = self.nusc.get('sample_data', lidar_sample_token)
         cs_record_lidar = self.nusc.get('calibrated_sensor', pointsensor['calibrated_sensor_token'])
         pose_record_lidar = self.nusc.get('ego_pose', pointsensor['ego_pose_token'])
-        cam = self.nusc.get('sample_data', cam_sample_tokens[0])
+        cam = self.nusc.get('sample_data', cam_sample_tokens)
         cs_record_cam = self.nusc.get('calibrated_sensor', cam['calibrated_sensor_token'])
         pose_record_cam = self.nusc.get('ego_pose', cam['ego_pose_token'])
 
-        calib_infos = {
+        calib_info = {
             "lidar2ego_translation": cs_record_lidar['translation'],
             "lidar2ego_rotation": cs_record_lidar['rotation'],
             "ego2global_translation_lidar": pose_record_lidar['translation'],
@@ -125,11 +125,11 @@ class nuScenes(Dataset):
         }
 
         data_dict = {
-            'lidar_points': pointcloud,     # shape: (P, 4) [x, y, z, intensity]
             'images': images,               # list of 6 PIL images
-            'calib_infos': calib_infos,
+            'lidar_points': pointcloud,     # shape: (P, 4) [x, y, z, intensity]
             'labels': sem_label.astype(np.uint8),
-            'origin_len': len(pointcloud)
+            'calib_info': calib_info,
+            'num_points': len(pointcloud)
         }
 
         return data_dict
@@ -152,11 +152,14 @@ def fusion_collate_fn(batch):
     # Process images
     num_views = 6
     images_list = []
+    image_sizes = []
     for sample in batch:
         # Convert list of PIL images to tensors and stack along view dimension
         imgs = torch.stack([to_tensor(img) for img in sample['images']], dim=0)  # (6, C, H, W)
         images_list.append(imgs)
+        image_sizes.append(sample['images'][0].size())
     images = torch.stack(images_list, dim=0)  # (B, 6, C, H, W)
+    image_sizes = torch.tensor(image_sizes, dtype=torch.long)
 
     # Process LiDAR points and labels
     lidar_list = [torch.from_numpy(sample['lidar_points']).float() for sample in batch]  # (B, P, 4)
@@ -175,4 +178,4 @@ def fusion_collate_fn(batch):
         labels_padded[i, :P] = labels_list[i]
         mask[i, :P] = 1
 
-    return images, lidar_points_padded, labels_padded, mask
+    return images, image_sizes, lidar_points_padded, labels_padded, mask, sample['calib_info']

@@ -5,7 +5,8 @@ import torch.nn as nn
 # Import utilities
 from utils.camera import ImageFeatureEncoder
 from utils.lidar import LiDARFeatureEncoder
-from utils.fusion_model import FeatureFusionModel, get_fusion_dataloaders, train_model
+from utils.fusion_model import FeatureFusionModel
+from utils.train import train_model
 from utils.plot import plot_training_history
 from utils.dataloader import fusion_collate_fn
 from torch.utils.data import DataLoader
@@ -53,13 +54,7 @@ def main():
         patch_tok_dim=384,
         mlp_hidden_dim=256,
         output_dim=num_classes,
-        origin_img_size=origin_img_size
     ).to(device)
-
-    # Assign camera parameters
-    # Replace these with your actual intrinsic/extrinsic matrices
-    model.K = intrinsic.to(device)    # torch.tensor(3,3)
-    model.Rt = extrinsic.to(device)   # torch.tensor(3,4)
 
     # Initialize Optimizer
     if config['train_params']['optimizer'] == 'AdamW':
@@ -76,7 +71,7 @@ def main():
     #          Training Loop        #
     # ==============================#
     train_his, val_his = train_model(
-        dataloaders=dataloaders,
+        dataloader=dataloader,
         image_encoder=image_encoder,
         pcd_encoder=pcd_encoder,
         model=model,
