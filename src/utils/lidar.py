@@ -11,7 +11,7 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.append(REPO_ROOT)
 from PointTransformerV3.model import PointTransformerV3
 
-class LiDARFeatureExtractor(nn.Module):
+class LiDARFeatureEncoder(nn.Module):
     """
     LiDAR -> Voxelize -> PTv3 -> Point Feature
     Input:  (P x 4) tensor  [x, y, z, intensity]
@@ -30,25 +30,25 @@ class LiDARFeatureExtractor(nn.Module):
         Args:
             lidar_points: (P, 4) torch.Tensor
         Returns:
-            point_features: (V, 64)
-            voxel_features: (V, 4)
+            voxel_features: (V, 64)
+            voxel_raw: (V, 4)
             voxel_coords: (V, 3)
         """
-        voxel_features, voxel_coords = self.voxelize_open3d(lidar_points)
+        voxel_raw, voxel_coords = self.voxelize_open3d(lidar_points)
 
         # Construct PointTransformerV3 input
-        input_dict = {
-            "coord": voxel_features[:, :3],
-            "feat": voxel_features,
+        voxel_input = {
+            "coord": voxel_raw[:, :3],
+            "feat": voxel_raw,
             "grid_size": torch.tensor(self.voxel_size, device=lidar_points.device),
-            "batch": torch.zeros(voxel_features.shape[0], dtype=torch.long, device=lidar_points.device)
+            "batch": torch.zeros(voxel_raw.shape[0], dtype=torch.long, device=lidar_points.device)
         }
 
         # Forward through PTv3
-        point = self.ptv3(input_dict)
-        point_features = point.feat  # (V, C), typically last decoder layer (64-dim)
+        voxel_output = self.ptv3(voxel_input)
+        voxel_features = voxel_output.feat  # (V, C), typically last decoder layer (64-dim)
 
-        return point_features, voxel_features, voxel_coords
+        return voxel_features, voxel_raw, voxel_coords
 
     def voxelize_open3d(self, lidar_points):
         """
@@ -69,9 +69,9 @@ class LiDARFeatureExtractor(nn.Module):
             nbrs = NearestNeighbors(n_neighbors=1, algorithm="auto").fit(pts[:, :3])
             _, idx = nbrs.kneighbors(down_points)
             intensities = pts[idx.squeeze(), 3].reshape(-1, 1)
-            voxel_features = np.hstack([down_points, intensities])
+            voxel_raw = np.hstack([down_points, intensities])
         else:
-            voxel_features = down_points
+            voxel_raw = down_points
 
         # Step 4: Compute voxel coordinates
         voxel_coords = np.floor(
@@ -79,22 +79,22 @@ class LiDARFeatureExtractor(nn.Module):
         ).astype(np.int32)
 
         # Step 5: Convert to torch
-        voxel_features = torch.from_numpy(voxel_features).float().to(lidar_points.device)
-        voxel_coords = torch.from_numpy(voxel_coords).int().to(lidar_points.device)
+        voxel_raw = torch.from_numpy(voxel_raw).float().to(lidar_points.device)     # (V, 4) raw per-voxel inputs: x,y,z,(intensity)
+        voxel_coords = torch.from_numpy(voxel_coords).int().to(lidar_points.device) # (V, 3) voxel grid coords
 
-        return voxel_features, voxel_coords
+        return voxel_raw, voxel_coords
 
 
 if __name__ == "__main__":
     # Simulated LiDAR cloud
     lidar_pcd = torch.randn(120000, 4).cuda()  # (P, 4)
 
-    # Instantiate extractor
-    extractor = LiDARFeatureExtractor(voxel_size=0.1).cuda()
+    # Instantiate encoder
+    pcd_encoder = LiDARFeatureEncoder(voxel_size=0.1).cuda()
 
     # Forward
-    features, voxels, coords = extractor(lidar_pcd)
+    voxel_features, voxel_raw, voxel_coords = pcd_encoder(lidar_pcd)
 
-    print("Input:", lidar_pcd.shape)
-    print("Voxelized:", voxels.shape)
-    print("Output features:", features.shape)
+    print("Input:", voxel_features.shape)
+    print("Voxelized:", voxel_raw.shape)
+    print("Output features:", voxel_features.shape)

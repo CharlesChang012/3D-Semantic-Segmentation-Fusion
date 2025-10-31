@@ -4,8 +4,8 @@ from PIL import Image
 
 
 class ImageFeatureEncoder:
-    def __init__(self, model_name="dinov3"):
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+    def __init__(self, model_name="dinov3", device="cuda"):
+        self.device = device
         self.model_name = model_name.lower()
         print("===========================================================")
         print(f"[INFO] Initializing ImageFeatureEncoder: {self.model_name}")
@@ -14,8 +14,10 @@ class ImageFeatureEncoder:
         
         if self.model_name == "dinov2":
             model_id = "facebook/dinov2-small"
+            self.patch_size = 14
         elif self.model_name == "dinov3":
             model_id = "facebook/dinov3-vits16-pretrain-lvd1689m"
+            self.patch_size = 16
         else:
             raise ValueError(f"Unsupported model name: {self.model_name}")
 

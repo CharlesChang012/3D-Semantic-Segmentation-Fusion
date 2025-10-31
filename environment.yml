@@ -264,7 +264,7 @@ dependencies:
       - pccm==0.4.16
       - pexpect==4.9.0
       - plotly==6.3.1
-      - pointops==1.0
+      # - pointops==1.0
       - portalocker==3.2.0
       - prompt-toolkit==3.0.52
       - propcache==0.4.1
@@ -304,4 +304,3 @@ dependencies:
       - widgetsnbextension==4.0.14
       - xxhash==3.6.0
       - yarl==1.22.0
-prefix: /home/yuic/.conda/envs/eecs442
