@@ -10,6 +10,7 @@ from utils.train import train_model
 from utils.plot import plot_training_history
 from utils.dataloader import fusion_collate_fn
 from torch.utils.data import DataLoader
+from utils.losses import CELSLoss
 
 def main():
 
@@ -61,7 +62,7 @@ def main():
         optimizer = torch.optim.SGD(model.parameters(), lr=config['train_params']['learning_rate'], momentum=config['train_params']['momentum'])
 
     # Initialize Loss function
-    criterion = nn.CrossEntropyLoss(ignore_index=-100)
+    criterion = CELSLoss(ignore_index=-100) # Cross-Entropy + Lovasz
 
     # ==============================#
     #          Training Loop        #

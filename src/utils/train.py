@@ -32,7 +32,7 @@ def train_model(dataloader, image_encoder, pcd_encoder, model, optimizer, criter
                 images = images.to(device)              # (B, 6, C, H, W)
                 image_sizes = image_sizes.to(device)    # (B, 2)
                 lidar_points = lidar_points.to(device)  # (B, max_P, 4)
-                labels = labels.to(device)              # (B, max_P, 4)
+                labels = labels.to(device)              # (B, max_P)
                 mask = mask.to(device)                  # (B, max_P)
 
                 B, P, _ = lidar_points.shape
@@ -52,15 +52,18 @@ def train_model(dataloader, image_encoder, pcd_encoder, model, optimizer, criter
                     # Forward pass through fusion model
                     outputs = model(patch_tokens, voxel_features, voxel_coords, image_sizes, calib_info['cam_intrinsic'], model.Rt)  # (B, V, num_classes)
 
-                    # Compute loss ignoring padded points
-                    outputs_flat = outputs.view(-1, outputs.shape[-1])      # (B*P, num_classes)
-                    labels_flat = labels.view(-1)                           # (B*P,)
-                    mask_flat = mask.view(-1)                               # (B*P,)
-                    outputs_masked = outputs_flat[mask_flat]
-                    labels_masked = labels_flat[mask_flat]
+                    # Compute loss using mask
+                    loss, ce_loss, lovasz_loss = criterion(outputs, labels, mask=mask)
 
-                    loss = criterion(outputs_masked, labels_masked)
-                    _, preds = torch.max(outputs_masked, 1)
+                    # Compute prediction accuracy
+                    outputs_flat = outputs.view(-1, outputs.shape[-1])
+                    labels_flat = labels[..., 0].view(-1)
+                    mask_flat = mask.view(-1)
+
+                    outputs_masked = outputs_flat[mask_flat]  # (N_valid, C)
+                    labels_masked = labels_flat[mask_flat]    # (N_valid,)
+
+                    _, preds = torch.max(outputs_masked, dim=1) 
 
                 if phase == 'train':
                     optimizer.zero_grad()
