@@ -75,7 +75,8 @@ class LiDARFeatureEncoder(nn.Module):
 
         # Step 4: Compute voxel coordinates
         voxel_coords = np.floor(
-            (down_points - np.array(self.pc_range[:3])) / self.voxel_size
+            down_points / self.voxel_size
+            # (down_points - np.array(self.pc_range[:3])) / self.voxel_size
         ).astype(np.int32)
 
         # Step 5: Convert to torch
