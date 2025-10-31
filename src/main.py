@@ -16,10 +16,6 @@ def main():
     # ==============================#
     #         Configurations        #
     # ==============================#
-    num_classes = 16
-    origin_img_size = (600, 900)
-    IMAGE_ENCODER = 'dinov3'
-    VOXEL_SIZE = 0.1
 
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -43,8 +39,8 @@ def main():
     #             Model             #
     # ==============================#
     # Initialize encoders
-    image_encoder = ImageFeatureEncoder(model_name=IMAGE_ENCODER, device=device)
-    pcd_encoder = LiDARFeatureEncoder(voxel_size=VOXEL_SIZE).to(device)
+    image_encoder = ImageFeatureEncoder(config, device=device)
+    pcd_encoder = LiDARFeatureEncoder(config).to(device)
 
     # Initialize fusion model
     model = FeatureFusionModel(
@@ -53,7 +49,7 @@ def main():
         point_feat_dim=64,
         patch_tok_dim=384,
         mlp_hidden_dim=256,
-        output_dim=num_classes,
+        output_dim=config['train_params']['mlp_class'],
     ).to(device)
 
     # Initialize Optimizer

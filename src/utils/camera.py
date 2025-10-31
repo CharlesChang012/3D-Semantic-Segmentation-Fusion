@@ -4,9 +4,9 @@ from PIL import Image
 
 
 class ImageFeatureEncoder:
-    def __init__(self, model_name="dinov3", device="cuda"):
+    def __init__(self, config, device="cuda"):
         self.device = device
-        self.model_name = model_name.lower()
+        self.model_name = config['train_params']['image_encoder'].lower()
         print("===========================================================")
         print(f"[INFO] Initializing ImageFeatureEncoder: {self.model_name}")
         print(f"[INFO] Using device: {self.device}")
