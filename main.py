@@ -80,8 +80,8 @@ def main():
     # Load best model
     best_model_path = os.path.join(config['train_params']['save_dir'], '3DSSF.pth')
     model.load_state_dict(torch.load(best_model_path, map_location=device))
-    
-    test_model(
+
+    test_loss, test_acc = test_model(
         dataloaders=dataloaders,
         image_encoder=image_encoder,
         pcd_encoder=pcd_encoder,

@@ -7,7 +7,7 @@ from sklearn.neighbors import NearestNeighbors
 import os
 import sys
 
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(REPO_ROOT)
 from PointTransformerV3.model import PointTransformerV3
 
