@@ -6,10 +6,8 @@ import torch.nn as nn
 from utils.camera import ImageFeatureEncoder
 from utils.lidar import LiDARFeatureEncoder
 from utils.fusion_model import FeatureFusionModel
-from utils.train import train_model
+from utils.train import train_model, test_model
 from utils.plot import plot_training_history
-from utils.dataloader import fusion_collate_fn
-from torch.utils.data import DataLoader
 from utils.losses import CELSLoss
 
 def main():
@@ -25,16 +23,7 @@ def main():
     # ==============================#
     #          Dataset Setup        #
     # ==============================#
-    
-    nuscenes_dataset = nuScenes(config, data_path, imageset='train')
-
-    dataloader = DataLoader(
-        nuscenes_dataset,
-        batch_size=config['dataset_params']['train_data_loader']['batch_size'],
-        shuffle=config['dataset_params']['train_data_loader']['shuffle'],
-        num_workers=config['dataset_params']['train_data_loader']['num_workers'],
-        collate_fn=fusion_collate_fn
-    )
+    dataloaders = create_dataloaders(config)
 
     # ==============================#
     #             Model             #
@@ -68,15 +57,15 @@ def main():
     #          Training Loop        #
     # ==============================#
     train_his, val_his = train_model(
-        dataloader=dataloader,
+        dataloaders=dataloaders,
         image_encoder=image_encoder,
         pcd_encoder=pcd_encoder,
         model=model,
         optimizer=optimizer,
         criterion=criterion,
         device=device,
-        save_dir=None,
-        num_epochs=NUM_EPOCHS,
+        save_dir=config['train_params']['save_dir'],
+        num_epochs=config['train_params']['max_num_epochs'],
         fusion_model_name='3DSSF'
     )
 
@@ -85,6 +74,21 @@ def main():
     # ==============================#
     plot_training_history(train_his, val_his)
 
+    # ==============================#
+    #          Testing Loop         #
+    # ==============================#
+    # Load best model
+    best_model_path = os.path.join(config['train_params']['save_dir'], '3DSSF.pth')
+    model.load_state_dict(torch.load(best_model_path, map_location=device))
+    
+    test_model(
+        dataloaders=dataloaders,
+        image_encoder=image_encoder,
+        pcd_encoder=pcd_encoder,
+        model=model,
+        criterion=criterion,
+        device=device
+    )
 
 if __name__ == "__main__":
     main()

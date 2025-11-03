@@ -5,7 +5,7 @@ from tqdm import tqdm
 import time
 import os
 
-def train_model(dataloader, image_encoder, pcd_encoder, model, optimizer, criterion, device,
+def train_model(dataloaders, image_encoder, pcd_encoder, model, optimizer, criterion, device,
                 save_dir=None, num_epochs=15, fusion_model_name='3DSSF'):
 
     val_acc_history = []
@@ -27,7 +27,9 @@ def train_model(dataloader, image_encoder, pcd_encoder, model, optimizer, criter
             running_corrects = 0
             total_points = 0
 
-            for images, image_sizes, lidar_points, labels, mask, calib_info in dataloader:
+            dataloader_tqdm = tqdm(dataloaders[phase], desc=f"{phase.capitalize()} Epoch {epoch}", leave=False)
+
+            for images, image_sizes, lidar_points, labels, mask, calib_info in dataloader_tqdm:
                 # Move to device
                 images = images.to(device)              # (B, 6, C, H, W)
                 image_sizes = image_sizes.to(device)    # (B, 2)
@@ -74,21 +76,85 @@ def train_model(dataloader, image_encoder, pcd_encoder, model, optimizer, criter
                 running_corrects += torch.sum(preds == labels_masked)
                 total_points += labels_masked.size(0)
 
-            epoch_loss = running_loss / total_points
-            epoch_acc = running_corrects.double() / total_points
-            print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
+                # Update tqdm bar description with current loss and accuracy
+                dataloader_tqdm.set_postfix({
+                    'Loss': running_loss / total_points,
+                    'Acc': running_corrects.double() / total_points
+                })
 
+            epoch_acc = running_corrects.double() / total_points
             if phase == 'val' and epoch_acc > best_acc:
                 best_acc = epoch_acc
                 best_model_wts = copy.deepcopy(model.state_dict())
                 if save_dir:
                     torch.save(best_model_wts, os.path.join(save_dir, fusion_model_name + '.pth'))
 
-            if phase == 'val':
-                val_acc_history.append(epoch_acc)
-            else:
+            if phase == 'train':
                 tr_acc_history.append(epoch_acc)
+            else:
+                val_acc_history.append(epoch_acc)
 
     print(f'Best val Acc: {best_acc:.4f}')
     model.load_state_dict(best_model_wts)
     return tr_acc_history, val_acc_history
+
+@torch.no_grad()
+def test_model(dataloaders, image_encoder, pcd_encoder, model, criterion, device):
+    """
+    Evaluate the model on the test set.
+    """
+    model.eval()
+    running_loss = 0.0
+    running_corrects = 0
+    total_points = 0
+
+    print("🔍 Running test evaluation...")
+    dataloader_tqdm = tqdm(dataloaders['test'], desc="Testing", leave=False)
+
+    for images, image_sizes, lidar_points, labels, mask, calib_info in dataloader_tqdm:
+        # Move to device
+        images = images.to(device)
+        image_sizes = image_sizes.to(device)
+        lidar_points = lidar_points.to(device)
+        labels = labels.to(device)
+        mask = mask.to(device)
+
+        # Extract features
+        patch_tokens_list = []
+        for v in range(images.shape[1]):
+            patch_tokens_list.append(image_encoder(images[:, v]))
+        patch_tokens = torch.stack(patch_tokens_list, dim=1)
+
+        voxel_features, voxel_raw, voxel_coords = pcd_encoder(lidar_points)
+
+        # Forward
+        outputs = model(patch_tokens, voxel_features, voxel_coords,
+                        image_sizes, calib_info['cam_intrinsic'], calib_info['cam2lidar_extrinsic'])
+
+        # Loss
+        loss, ce_loss, lovasz_loss = criterion(outputs, labels, mask=mask)
+
+        # Accuracy
+        outputs_flat = outputs.view(-1, outputs.shape[-1])
+        labels_flat = labels[..., 0].view(-1)
+        mask_flat = mask.view(-1)
+
+        outputs_masked = outputs_flat[mask_flat]
+        labels_masked = labels_flat[mask_flat]
+        _, preds = torch.max(outputs_masked, dim=1)
+
+        running_loss += loss.item() * labels_masked.size(0)
+        running_corrects += torch.sum(preds == labels_masked)
+        total_points += labels_masked.size(0)
+
+        # Update tqdm metrics
+        dataloader_tqdm.set_postfix({
+            'Loss': running_loss / total_points,
+            'Acc': running_corrects.double() / total_points
+        })
+
+    test_loss = running_loss / total_points
+    test_acc = running_corrects.double() / total_points
+    print(f"\n✅ Test Loss: {test_loss:.4f}, Test Accuracy: {test_acc:.4f}")
+
+    return test_loss, test_acc

@@ -3,18 +3,18 @@ import yaml
 import numpy as np
 from pathlib import Path
 from PIL import Image
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 from nuscenes import NuScenes
 from nuscenes.utils import splits
 from pyquaternion import Quaternion
 
 class nuScenes(Dataset):
-    def __init__(self, config, data_path, imageset='train', num_vote=1):
+    def __init__(self, config, imageset='train', num_vote=1):
         if config.get("debug", False):
             version = 'v1.0-mini'
             scenes = splits.mini_train
         else:
-            if imageset != 'test':
+            if imageset == 'train' or imageset == 'val':
                 version = 'v1.0-trainval'
                 scenes = splits.train if imageset == 'train' else splits.val
             else:
@@ -26,7 +26,7 @@ class nuScenes(Dataset):
         self.learning_map = nuscenesyaml['learning_map']
 
         self.num_vote = num_vote
-        self.data_path = data_path
+        self.data_path = config['dataset_params']['train_data_loader']['data_path']
         self.imageset = imageset
         self.img_view = ['CAM_FRONT', 'CAM_FRONT_RIGHT', 'CAM_BACK_RIGHT', 'CAM_BACK', 
                          'CAM_BACK_LEFT', 'CAM_FRONT_LEFT']
@@ -161,6 +161,22 @@ class nuScenes(Dataset):
 
         return data_dict
 
+def create_dataloaders(config):
+    """Create DataLoaders for train, val, and test splits."""
+    batch_size = config['dataset_params']['train_data_loader']['batch_size']
+    shuffle = config['dataset_params']['train_data_loader']['shuffle']
+    num_workers = config['dataset_params']['train_data_loader']['num_workers']
+
+    datasets = {split: nuScenes(config, imageset=split) for split in ['train', 'val', 'test']}
+    dataloaders = {
+        split: DataLoader(datasets[split], 
+                          batch_size=batch_size,
+                          shuffle=(split=='train'),
+                          num_workers=num_workers,
+                          collate_fn=fusion_collate_fn)
+        for split in ['train', 'val', 'test']
+    }
+    return dataloaders
 
 def fusion_collate_fn(batch):
     """
