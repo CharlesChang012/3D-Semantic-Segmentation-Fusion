@@ -18,18 +18,42 @@ By leveraging DINOv3’s enhanced visual embeddings and zero-shot capabilities, 
 - **Fusion Module:** MLP or projection-based cross-modal fusion  
 - **Training:** Cross-Entropy + Lovasz-Softmax loss for per-class IoU optimization
 
-## Setup Guide
+## 1. Download dataset
+### 1.1 Make directory for dataset
+```bash
+$ mkdir <Path/To/dataset/nuscenes>
+$ cd <Path/To/dataset/nuscenes>
+```
+### 1.2 Mini set
+```bash
+$ wget https://www.nuscenes.org/data/v1.0-mini.tgz
+$ tar -xvzf v1.0-mini.tgz
+```
+### 1.3 Training set
+```bash
+$ wget -c "https://motional-nuscenes.s3.amazonaws.com/public/v1.0/v1.0-trainval01_blobs.tgz"
+$ tar -xvzf v1.0-trainval01_blobs.tgz
+$ wget -c "https://motional-nuscenes.s3.amazonaws.com/public/v1.0/v1.0-trainval_meta.tgz"
+$ tar -xvzf v1.0-trainval_meta.tgz
+```
+<!-- 2. Test set
+```bash
+$ wget -c "https://motional-nuscenes.s3.amazonaws.com/public/v1.0/v1.0-test01_blobs.tgz"
+$ tar -xvzf v1.0-trainval01_blobs.tgz
+$ wget -c "http://datasets.blockelite.cn/43.nuScenes/v1.0-test_meta.tgz"
+$ tar -xvzf v1.0-trainval_meta.tgz
+``` -->
 
-### 1. Clone the Repository and Initialize Submodules
+## 2. Setup Guide
+
+### 2.1 Clone the Repository and Initialize Submodules
 ```bash
 $ git clone git@github.com:CharlesChang012/3D-Semantic-Segmentation-Fusion.git
 $ cd 3D-Semantic-Segmentation-Fusion
 $ git submodule update --init --recursive
 ```
 
----
-
-### 2. Launch an Interactive GPU Session if using UMich HPC [6] (Skip to [Step 4](#4-create-the-conda-environment) if using local machine)
+### 2.2. Launch an Interactive GPU Session if using UMich HPC [6] (Skip to [Step 4](#4-create-the-conda-environment) if using local machine)
 Start a GPU session (see [UMich documentation](https://documentation.its.umich.edu/node/5078)):  
 ```bash
 $ salloc --account=<account> \   
@@ -52,31 +76,29 @@ $ salloc --account=<account> \
   $ watch squeue --me
   ```
 
-
----
-
-### 3. Load GPU and Compiler
+### 2.3 Load GPU and Compiler
 ```bash
 $ module load cuda/12.1.1
 $ module load gcc/11.2.0
 $ nvcc --version
 ```
 
----
-
-### 4. Create the Conda Environment
+### 2.4 Create the Conda Environment
 ```bash
 $ cd 3D-Semantic-Segmentation-Fusion
 $ conda env create -f environment.yml
 $ conda activate 3DSSF
 ```
 
----
-
-### 5. Build PointOps from PointTransformerV3 Source
+### 2.5 Install NuScenes Devkit
 ```bash
-cd PointTransformerV3/Pointcept/libs/pointops/
-python setup.py install
+$ pip install nuscenes-devkit &> /dev/null
+```
+
+### 2.6 Build PointOps from PointTransformerV3 Source
+```bash
+$ cd PointTransformerV3/Pointcept/libs/pointops/
+$ python setup.py install
 ```
 
 ---
