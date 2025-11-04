@@ -75,16 +75,20 @@ def multi_camera_projector(lidar_points, cam_intrinsics, cam2lidar_extrinsics, i
 
         valid = (z > 0) & (u >= 0) & (u < img_w) & (v >= 0) & (v < img_h)
 
-        depth[:, cam_idx] = z
         valid_mask[:, cam_idx] = valid
 
         coords = torch.stack([u, v], dim=-1)
         coords = torch.where(valid.unsqueeze(-1), coords, torch.full_like(coords, -1.0))
         pixel_coords[:, cam_idx] = coords
+        depth[:, cam_idx] = torch.where(valid, z, torch.full_like(z, -1.0))  # (B, V)
 
     return pixel_coords, depth, valid_mask
 
+    # Stack per-camera to (B, n_cam, V, 2) and (B, n_cam, V)
+    proj_uv_all = torch.stack(proj_uv_all, dim=1)
+    depth_all = torch.stack(depth_all, dim=1)
 
+    return proj_uv_all, depth_all
 
 
 def scale_pixel_coords(pixel_coords: torch.Tensor,
@@ -151,6 +155,7 @@ class FeatureFusionModel(nn.Module):
         B, V, _ = voxel_features.shape
         _, num_views, M, dim = patch_tokens.shape
 
+        # 1. Project 3D → 2D
         pixel_coords, _, valid_mask = multi_camera_projector(
             voxel_coords, cam_intrinsics, cam2lidar_extrinsics, image_sizes
         )
