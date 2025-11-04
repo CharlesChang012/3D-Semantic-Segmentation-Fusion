@@ -11,77 +11,66 @@ import os
 # -------------------------
 # 1. Projector
 # -------------------------
-class MultiCameraPointProjector:
-    def __init__(self, K, Rt, img_size=(900, 1600)):
-        """
-        Multi-camera LiDAR→image projection
+def multi_camera_projector(lidar_voxels, calib_info_list, image_sizes):
+    """
+    Project LiDAR points from all 6 cameras.
 
-        Args:
-            K:  (B, 6, 3, 3)  intrinsics for 6 cameras
-            Rt: (B, 6, 4, 4)  LiDAR→camera extrinsics for 6 cameras
-            img_size: (H, W)  image height & width for boundary check
-        """
-        self.K = K
-        self.Rt = Rt
-        self.img_h, self.img_w = img_size
+    Args:
+        lidar_voxels: (B, V, 3) LiDAR voxel coordinates in LiDAR frame
 
-    @torch.no_grad()
-    def __call__(self, lidar_points):
-        """
-        Project LiDAR points from all 6 cameras.
+    Returns:
+        proj_uv_all: list of 6 elements, each (B, N_valid, 2)
+        depth_all:   list of 6 elements, each (B, N_valid)
+    """
+    self.K = [sample['cam_intrinsic'] for sample in calib_info_list]
+    self.Rt = [sample['cam2lidar_extrinsic'] for sample in calib_info_list]
+    self.img_h = [img_size[0] for img_size in image_sizes]
+    self.img_w = [img_size[1] for img_size in image_sizes]
 
-        Args:
-            lidar_points: (B, V, 3) LiDAR points in LiDAR frame
+    B, V, _ = lidar_voxels.shape
+    n_cam = self.K.shape[1]
+    device = lidar_voxels.device
 
-        Returns:
-            proj_uv_all: list of 6 elements, each (B, N_valid, 2)
-            depth_all:   list of 6 elements, each (B, N_valid)
-        """
-        B, V, _ = lidar_points.shape
-        n_cam = self.K.shape[1]
-        device = lidar_points.device
+    # Homogeneous LiDAR points (B,V,4)
+    pts_h = torch.cat(
+        [lidar_voxels, torch.ones(B, V, 1, device=device)], dim=-1
+    )
 
-        # Homogeneous LiDAR points (B,V,4)
-        pts_h = torch.cat(
-            [lidar_points, torch.ones(B, V, 1, device=device)], dim=-1
-        )
+    proj_uv_all = []
+    depth_all = []
 
-        proj_uv_all, depth_all = [], []
+    # Loop over cameras and build dense tensors per camera: (B, V, 2) and (B, V)
+    for cam_idx in range(n_cam):
+        K_cam = self.K[:, cam_idx, :, :]      # (B,3,3)
+        Rt_cam = self.Rt[:, cam_idx, :, :]    # (B,4,4)
 
-        # Loop over cameras
-        for cam_idx in range(n_cam):
-            K_cam = self.K[:, cam_idx]      # (B,3,3)
-            Rt_cam = self.Rt[:, cam_idx]    # (B,4,4)
+        # LiDAR → camera coordinates
+        cam_pts = torch.matmul(Rt_cam, pts_h.unsqueeze(-1)).squeeze(-1)  # (B,V,4)
+        xyz = cam_pts[:, :, :3]
+        z = xyz[:, :, 2]  # depth in camera frame
 
-            # LiDAR → camera coordinates
-            cam_pts = torch.matmul(Rt_cam, pts_h.unsqueeze(-1)).squeeze(-1)  # (B,V,4)
-            xyz = cam_pts[:, :, :3]
-            z = xyz[:, :, 2]  # depth in camera frame
+        # Camera → image coordinates
+        pix = torch.matmul(K_cam, xyz.transpose(1, 2)).transpose(1, 2)   # (B,V,3)
+        u = pix[:, :, 0] / (pix[:, :, 2] + 1e-12)
+        v = pix[:, :, 1] / (pix[:, :, 2] + 1e-12)
 
-            # Camera → image coordinates
-            pix = torch.matmul(K_cam, xyz.transpose(1, 2)).transpose(1, 2)   # (B,V,3)
-            u = pix[:, :, 0] / (pix[:, :, 2] + 1e-12)
-            v = pix[:, :, 1] / (pix[:, :, 2] + 1e-12)
+        # Validity mask (front of cam + inside image bounds)
+        # Note: self.img_w / img_h may be int or list; make them tensors/broadcastable if needed
+        mask = (z > 0) & (u >= 0) & (u < self.img_w) & (v >= 0) & (v < self.img_h)  #(B, V)
 
-            # Validity mask (front of cam + inside image bounds)
-            mask = (z > 0) & (u >= 0) & (u < self.img_w) & (v >= 0) & (v < self.img_h)
+        # Create dense per-point uv and depth tensors with sentinel -1 for invalids
+        uv = torch.stack([u, v], dim=-1)  # (B, V, 2)
+        uv = torch.where(mask.unsqueeze(-1), uv, torch.full_like(uv, -1.0))
+        depth = torch.where(mask, z, torch.full_like(z, -1.0))  # (B, V)
 
-            cam_uv_valid, cam_depth_valid = [], []
-            for b in range(B):
-                valid_idx = mask[b]
-                u_valid = u[b, valid_idx]
-                v_valid = v[b, valid_idx]
-                d_valid = z[b, valid_idx]
-                uv_valid = torch.stack([u_valid, v_valid], dim=-1)  # (N_valid,2)
-                cam_uv_valid.append(uv_valid)
-                cam_depth_valid.append(d_valid)
+        proj_uv_all.append(uv)
+        depth_all.append(depth)
 
-            proj_uv_all.append(cam_uv_valid)
-            depth_all.append(cam_depth_valid)
+    # Stack per-camera to (B, n_cam, V, 2) and (B, n_cam, V)
+    proj_uv_all = torch.stack(proj_uv_all, dim=1)
+    depth_all = torch.stack(depth_all, dim=1)
 
-        return proj_uv_all, depth_all
-
-
+    return proj_uv_all, depth_all
 
 
 def scale_pixel_coords(pixel_coords: torch.Tensor,
@@ -109,9 +98,6 @@ class FeatureFusionModel(nn.Module):
         self.image_encoder = image_encoder
         self.pcd_encoder = pcd_encoder
 
-        # Camera + LiDAR Extrinsics
-        self.projector = MultiCameraPointProjector()
-
         # MLP
         self.mlp = nn.Sequential(
             nn.Linear(point_feat_dim + patch_tok_dim, mlp_hidden_dim),
@@ -119,12 +105,12 @@ class FeatureFusionModel(nn.Module):
             nn.Linear(mlp_hidden_dim, output_dim)
         )
 
-    def forward(self, patch_tokens, voxel_features, voxel_coords, image_sizes, K, Rt):
+    def forward(self, patch_tokens, voxel_features, voxel_coords, image_sizes, calib_info_list):
         B, V, _ = voxel_features.shape
         _, num_views, M, dim = patch_tokens.shape
 
         # 1. Project 3D → 2D
-        pixel_coords = self.projector(voxel_coords, K, Rt)     # List of (B, V, 2) for each camera
+        pixel_coords = multi_camera_projector(voxel_coords, calib_info_list, image_sizes)     # List of (B, V, 2) for each camera
 
         # 2. Scale pixel coords to resized image
         pixel_coords = scale_pixel_coords(pixel_coords, image_sizes[0], (self.image_encoder.resize_size, self.image_encoder.resize_size))
