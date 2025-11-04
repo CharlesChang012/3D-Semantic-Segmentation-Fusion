@@ -4,6 +4,7 @@ import torch.optim as optim
 from tqdm import tqdm
 import time
 import os
+import copy
 # Import evaluation metrics
 from utils.evaluation import compute_confusion_matrix, compute_iou, per_class_accuracy, overall_accuracy, precision_recall_f1
 
@@ -31,7 +32,7 @@ def train_model(dataloaders, image_encoder, pcd_encoder, model, optimizer, crite
 
             dataloader_tqdm = tqdm(dataloaders[phase], desc=f"{phase.capitalize()} Epoch {epoch}", leave=False)
 
-            for images, image_sizes, lidar_points, labels, mask, calib_info in dataloader_tqdm:
+            for images, image_sizes, lidar_points, labels, mask, cam_intrinsics, cam2lidar_extrinsics in dataloader_tqdm:
                 # Move to device
                 images = images.to(device)              # (B, 6, C, H, W)
                 image_sizes = image_sizes.to(device)    # (B, 2)
@@ -46,15 +47,21 @@ def train_model(dataloaders, image_encoder, pcd_encoder, model, optimizer, crite
                     # Image encoder: flatten batch and views
                     # Option 1: process all views separately
                     patch_tokens_list = []
+                    global_tokens_list = []
+
                     for v in range(images.shape[1]):
-                        patch_tokens_list.append(image_encoder(images[:, v]))  # (B, M, patch_dim)
-                    patch_tokens = torch.stack(patch_tokens_list, dim=1)  # (B, 6, M, patch_dim)
+                        feats = image_encoder(images[:, v])  # (B, M, patch_dim)
+                        patch_tokens_list.append(feats["patch_features"])
+                        global_tokens_list.append(feats["global_features"])
+
+                    patch_tokens = torch.stack(patch_tokens_list, dim=1)   # (B, 6, M, patch_dim)
+                    global_tokens = torch.stack(global_tokens_list, dim=1) # (B, 6, patch_dim)  
 
                     # Point cloud encoder
-                    voxel_features, voxel_raw, voxel_coords = pcd_encoder(lidar_points)  # (B,V,feat_dim), (B,V,4), (B,V,3)
+                    voxel_features, voxel_raw, voxel_coords, voxel_mask = pcd_encoder(lidar_points)  # (B,V,feat_dim), (B,V,4), (B,V,3), (B,V)
 
                     # Forward pass through fusion model
-                    outputs = model(patch_tokens, voxel_features, voxel_coords, image_sizes, calib_info['cam_intrinsic'], calib_info['cam2lidar_extrinsic'])  # (B, V, num_classes)
+                    outputs = model(patch_tokens, voxel_features, voxel_coords, image_sizes, cam_intrinsics, cam2lidar_extrinsics)  # (B, V, num_classes)
 
                     # Compute loss using mask
                     loss, ce_loss, lovasz_loss = criterion(outputs, labels, mask=mask)

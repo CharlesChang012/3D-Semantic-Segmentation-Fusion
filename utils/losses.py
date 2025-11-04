@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from lovasz_losses import lovasz_softmax
+from LovaszSoftmax.pytorch.lovasz_losses import lovasz_softmax
 
 class CELSLoss(nn.Module):
     """

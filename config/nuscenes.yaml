@@ -13,13 +13,13 @@ dataset_params:
   label_mapping: "./config/label_mapping/nuscenes.yaml"
   
   train_data_loader:
-    data_path: "/scratch/rob535f25s001_class_root/rob535f25s001_class/pohsun/dataset/nuscenes/"
+    data_path: "/scratch/rob535f25s001_class_root/rob535f25s001_class/pohsun/datasets/nuscenes/"
     batch_size: 12
     shuffle: True
     num_workers: 4
 
   val_data_loader:
-    data_path: "/scratch/rob535f25s001_class_root/rob535f25s001_class/pohsun/dataset/nuscenes/"
+    data_path: "/scratch/rob535f25s001_class_root/rob535f25s001_class/pohsun/datasets/nuscenes/"
     batch_size: 12
     shuffle: False
     num_workers: 4

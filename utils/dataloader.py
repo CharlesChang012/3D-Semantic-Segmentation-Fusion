@@ -3,10 +3,13 @@ import yaml
 import numpy as np
 from pathlib import Path
 from PIL import Image
+import torch
 from torch.utils.data import Dataset, DataLoader
+from torchvision import transforms
 from nuscenes import NuScenes
 from nuscenes.utils import splits
 from pyquaternion import Quaternion
+
 
 class nuScenes(Dataset):
     def __init__(self, config, imageset='train', num_vote=1):
@@ -32,7 +35,7 @@ class nuScenes(Dataset):
                          'CAM_BACK_LEFT', 'CAM_FRONT_LEFT']
 
 
-        self.nusc = NuScenes(version=version, dataroot=data_path, verbose=True)
+        self.nusc = NuScenes(version=version, dataroot=self.data_path, verbose=True)
 
         self.get_available_scenes()
         available_scene_names = [s['name'] for s in self.available_scenes]
@@ -99,13 +102,16 @@ class nuScenes(Dataset):
         # Load all 6 camera images
         images = []
         cam_sample_tokens = []
+        cam_intrinsics = []
         for i in range(6):
             img, cam_token = self.loadImage(index, i)
             images.append(img)
             cam_sample_tokens.append(cam_token)
+            cam_path, boxes_front_cam, cam_intrinsic = self.nusc.get_sample_data(cam_token)
+            cam_intrinsics.append(cam_intrinsic)
 
         # Use the first camera for calibration (or extend for all cameras if needed)
-        cam_path, boxes_front_cam, cam_intrinsic = self.nusc.get_sample_data(cam_sample_tokens)
+        # cam_path, boxes_front_cam, cam_intrinsic = self.nusc.get_sample_data(cam_sample_tokens[0])
         pointsensor = self.nusc.get('sample_data', lidar_sample_token)
         cs_record_lidar = self.nusc.get('calibrated_sensor', pointsensor['calibrated_sensor_token'])
         pose_record_lidar = self.nusc.get('ego_pose', pointsensor['ego_pose_token'])
@@ -138,25 +144,26 @@ class nuScenes(Dataset):
             T_cam_lidar = T_lidar_ego_inv @ T_cam_ego        # Camera 2 LiDAR = inv(T_lidar_ego) @ T_cam_ego
             cam2lidar_list.append(T_cam_lidar)
 
-        calib_info = {
-            # "lidar2ego_translation": cs_record_lidar['translation'],
-            # "lidar2ego_rotation": cs_record_lidar['rotation'],
-            # "ego2global_translation_lidar": pose_record_lidar['translation'],
-            # "ego2global_rotation_lidar": pose_record_lidar['rotation'],
-            # "ego2global_translation_cam": [pose['translation'] for pose in pose_record_cam],
-            # "ego2global_rotation_cam": [pose['rotation'] for pose in pose_record_cam],
-            # "cam2ego_translation": [cs['translation'] for cs in cs_record_cam],
-            # "cam2ego_rotation": [cs['rotation'] for cs in cs_record_cam],
-            "cam_intrinsic": cam_intrinsic,
-            "cam2lidar_extrinsic": cam2lidar_list,
-        }
+        # calib_info = {
+        #     # "lidar2ego_translation": cs_record_lidar['translation'],
+        #     # "lidar2ego_rotation": cs_record_lidar['rotation'],
+        #     # "ego2global_translation_lidar": pose_record_lidar['translation'],
+        #     # "ego2global_rotation_lidar": pose_record_lidar['rotation'],
+        #     # "ego2global_translation_cam": [pose['translation'] for pose in pose_record_cam],
+        #     # "ego2global_rotation_cam": [pose['rotation'] for pose in pose_record_cam],
+        #     # "cam2ego_translation": [cs['translation'] for cs in cs_record_cam],
+        #     # "cam2ego_rotation": [cs['rotation'] for cs in cs_record_cam],
+        #     "cam_intrinsic": cam_intrinsics,
+        #     "cam2lidar_extrinsic": cam2lidar_list,
+        # }
 
         data_dict = {
             'images': images,               # list of 6 PIL images
             'lidar_points': pointcloud,     # shape: (P, 4) [x, y, z, intensity]
             'labels': sem_label.astype(np.uint8),
-            'calib_info': calib_info,
-            'num_points': len(pointcloud)
+            'num_points': len(pointcloud),
+            'cam_intrinsic': np.array(cam_intrinsics),
+            'cam2lidar_extrinsic': np.array(cam2lidar_list)
         }
 
         return data_dict
@@ -200,13 +207,15 @@ def fusion_collate_fn(batch):
         # Convert list of PIL images to tensors and stack along view dimension
         imgs = torch.stack([to_tensor(img) for img in sample['images']], dim=0)  # (6, C, H, W)
         images_list.append(imgs)
-        image_sizes.append(sample['images'][0].size())
+        image_sizes.append(sample['images'][0].size)
     images = torch.stack(images_list, dim=0)  # (B, 6, C, H, W)
     image_sizes = torch.tensor(image_sizes, dtype=torch.long)
 
     # Process LiDAR points and labels
     lidar_list = [torch.from_numpy(sample['lidar_points']).float() for sample in batch]  # (B, P, 4)
-    labels_list = [torch.from_numpy(sample['labels']).long() for sample in batch]           # (B, P)
+    labels_list = [torch.from_numpy(sample['labels']).long().squeeze() for sample in batch]  # (B, P)
+    cam_intrinsics = [torch.from_numpy(sample['cam_intrinsic']).float().squeeze() for sample in batch]    # (B,)
+    cam2lidar_extrinsics = [torch.from_numpy(sample['cam2lidar_extrinsic']).float().squeeze() for sample in batch]  # (B,)
 
     max_P = max([l.shape[0] for l in lidar_list])
     pcd_feat_dim = lidar_list[0].shape[1]       # 4
@@ -221,4 +230,4 @@ def fusion_collate_fn(batch):
         labels_padded[i, :P] = labels_list[i]
         mask[i, :P] = 1
 
-    return images, image_sizes, lidar_points_padded, labels_padded, mask, sample['calib_info']
+    return images, image_sizes, lidar_points_padded, labels_padded, mask, cam_intrinsics, cam2lidar_extrinsics

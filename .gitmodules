@@ -5,3 +5,7 @@
 [submodule "PTv3"]
 	path = PointTransformerV3
 	url = https://github.com/Pointcept/PointTransformerV3.git
+
+[submodule "LovaszSoftmax"]
+	path = LovaszSoftmax
+	url = https://github.com/bermanmaxim/LovaszSoftmax.git

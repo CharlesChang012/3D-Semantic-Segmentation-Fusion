@@ -20,35 +20,63 @@ class LiDARFeatureEncoder(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        self.voxel_size = config['lidar']['voxel_size']
-        self.pc_range = config['lidar']['point_cloud_range']
+        self.voxel_size = config['dataset_params']['lidar']['voxel_size']
+        self.pc_range = config['dataset_params']['lidar']['point_cloud_range']
         # Load PTv3 backbone from the official repo
         self.ptv3 = PointTransformerV3(in_channels=4)
 
     def forward(self, lidar_points):
         """
         Args:
-            lidar_points: (P, 4) torch.Tensor
+            lidar_points: (B, P, 4) torch.Tensor
         Returns:
-            voxel_features: (V, 64)
-            voxel_raw: (V, 4)
-            voxel_coords: (V, 3)
+            voxel_features_torch: (B, V_max, 64)
+            voxel_raw_torch: (B, V_max, 4)
+            voxel_coords_torch: (B, V_max, 3)
+            voxel_mask: (B, V_max) bool tensor, True for valid voxels
         """
-        voxel_raw, voxel_coords = self.voxelize_open3d(lidar_points)
+        B = lidar_points.shape[0]
+        voxel_features_list = []
+        voxel_raw_list = []
+        voxel_coords_list = []
+        voxel_lengths = []
 
-        # Construct PointTransformerV3 input
-        voxel_input = {
-            "coord": voxel_raw[:, :3],
-            "feat": voxel_raw,
-            "grid_size": torch.tensor(self.voxel_size, device=lidar_points.device),
-            "batch": torch.zeros(voxel_raw.shape[0], dtype=torch.long, device=lidar_points.device)
-        }
+        # --- Voxelize per sample ---
+        for i in range(B):
+            voxel_raw, voxel_coords = self.voxelize_open3d(lidar_points[i])
 
-        # Forward through PTv3
-        voxel_output = self.ptv3(voxel_input)
-        voxel_features = voxel_output.feat  # (V, C), typically last decoder layer (64-dim)
+            voxel_input = {
+                "coord": voxel_raw[:, :3],
+                "feat": voxel_raw,
+                "grid_size": torch.tensor(self.voxel_size, device=lidar_points.device),
+                "batch": torch.zeros(voxel_raw.shape[0], dtype=torch.long, device=lidar_points.device)
+            }
 
-        return voxel_features, voxel_raw, voxel_coords
+            voxel_output = self.ptv3(voxel_input)
+            voxel_features = voxel_output.feat  # (V, C)
+
+            voxel_features_list.append(voxel_features)
+            voxel_raw_list.append(voxel_raw)
+            voxel_coords_list.append(voxel_coords)
+            voxel_lengths.append(voxel_features.shape[0])
+
+        # --- Pad to max voxel length ---
+        V_max = max(voxel_lengths)
+        C_feat = voxel_features_list[0].shape[1]
+
+        voxel_features_torch = torch.zeros((B, V_max, C_feat), device=lidar_points.device)
+        voxel_raw_torch = torch.zeros((B, V_max, 4), device=lidar_points.device)
+        voxel_coords_torch = torch.zeros((B, V_max, 3), device=lidar_points.device, dtype=torch.int)
+        voxel_mask = torch.zeros((B, V_max), device=lidar_points.device, dtype=torch.bool)
+
+        for i in range(B):
+            V = voxel_lengths[i]
+            voxel_features_torch[i, :V] = voxel_features_list[i]
+            voxel_raw_torch[i, :V] = voxel_raw_list[i]
+            voxel_coords_torch[i, :V] = voxel_coords_list[i]
+            voxel_mask[i, :V] = 1  # mark valid voxels
+
+        return voxel_features_torch, voxel_raw_torch, voxel_coords_torch, voxel_mask
 
     def voxelize_open3d(self, lidar_points):
         """

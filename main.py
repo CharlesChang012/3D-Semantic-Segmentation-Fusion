@@ -2,6 +2,7 @@ import argparse
 import os
 import torch
 import torch.nn as nn
+import yaml
 # Import utilities
 from utils.camera import ImageFeatureEncoder
 from utils.lidar import LiDARFeatureEncoder
@@ -9,16 +10,20 @@ from utils.fusion_model import FeatureFusionModel
 from utils.train import train_model, test_model
 from utils.plot import plot_training_history
 from utils.losses import CELSLoss
+from utils.dataloader import create_dataloaders
 
 def main():
 
     # ==============================#
     #         Configurations        #
     # ==============================#
-
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"🚀 Using device: {device}")
+
+    # Load configuration file
+    with open("config/nuscenes.yaml", "r") as f:
+        config = yaml.safe_load(f)
 
     # ==============================#
     #          Dataset Setup        #

@@ -11,89 +11,120 @@ import os
 # -------------------------
 # 1. Projector
 # -------------------------
-class MultiCameraPointProjector:
-    def __init__(self, K, Rt, img_size=(900, 1600)):
-        """
-        Multi-camera LiDAR→image projection
+def multi_camera_projector(lidar_points, cam_intrinsics, cam2lidar_extrinsics, image_sizes):
+    """
+    Project batched LiDAR points into multiple camera views.
 
-        Args:
-            K:  (B, 6, 3, 3)  intrinsics for 6 cameras
-            Rt: (B, 6, 4, 4)  LiDAR→camera extrinsics for 6 cameras
-            img_size: (H, W)  image height & width for boundary check
-        """
-        self.K = K
-        self.Rt = Rt
-        self.img_h, self.img_w = img_size
+    Args:
+        lidar_points: (B, V, 3) tensor of LiDAR coordinates in the LiDAR frame.
+        cam_intrinsics: iterable of length B; each item has shape (N_cam, 3, 3).
+        cam2lidar_extrinsics: iterable of length B; each item has shape (N_cam, 4, 4).
+        image_sizes: iterable of length B with tuples (H, W) for each view (assumes same size across cameras per sample).
 
-    @torch.no_grad()
-    def __call__(self, lidar_points):
-        """
-        Project LiDAR points from all 6 cameras.
+    Returns:
+        pixel_coords: (B, N_cam, V, 2) tensor with per-view pixel coordinates (u, v).
+        depth: (B, N_cam, V) tensor with per-view depths in the camera frame.
+        valid_mask: (B, N_cam, V) boolean mask indicating points that project inside the image with positive depth.
+    """
 
-        Args:
-            lidar_points: (B, V, 3) LiDAR points in LiDAR frame
+    device = lidar_points.device
+    dtype = lidar_points.dtype
 
-        Returns:
-            proj_uv_all: list of 6 elements, each (B, N_valid, 2)
-            depth_all:   list of 6 elements, each (B, N_valid)
-        """
-        B, V, _ = lidar_points.shape
-        n_cam = self.K.shape[1]
-        device = lidar_points.device
+    B, V, _ = lidar_points.shape
+    n_cam = cam_intrinsics[0].shape[0]
 
-        # Homogeneous LiDAR points (B,V,4)
-        pts_h = torch.cat(
-            [lidar_points, torch.ones(B, V, 1, device=device)], dim=-1
-        )
+    def _to_tensor(data, expected_shape_tail):
+        tensors = []
+        for item in data:
+            if not torch.is_tensor(item):
+                tensors.append(torch.as_tensor(item, dtype=torch.float32, device=device))
+            else:
+                tensors.append(item.to(device=device, dtype=torch.float32))
+        stacked = torch.stack(tensors, dim=0)
+        if stacked.shape[1:] != expected_shape_tail:
+            raise ValueError(f"Expected shape (*, {expected_shape_tail}) but got {stacked.shape}.")
+        return stacked
 
-        proj_uv_all, depth_all = [], []
+    K = _to_tensor(cam_intrinsics, (n_cam, 3, 3))  # (B, N_cam, 3, 3)
+    Rt = _to_tensor(cam2lidar_extrinsics, (n_cam, 4, 4))  # (B, N_cam, 4, 4)
 
-        # Loop over cameras
-        for cam_idx in range(n_cam):
-            K_cam = self.K[:, cam_idx]      # (B,3,3)
-            Rt_cam = self.Rt[:, cam_idx]    # (B,4,4)
+    img_sizes_tensor = torch.as_tensor(image_sizes, dtype=dtype, device=device)  # (B, 2) in (H, W)
+    if img_sizes_tensor.shape != (B, 2):
+        raise ValueError("image_sizes must be of shape (B, 2) where each entry is (H, W).")
+    img_h = img_sizes_tensor[:, 0].view(B, 1, 1)
+    img_w = img_sizes_tensor[:, 1].view(B, 1, 1)
 
-            # LiDAR → camera coordinates
-            cam_pts = torch.matmul(Rt_cam, pts_h.unsqueeze(-1)).squeeze(-1)  # (B,V,4)
-            xyz = cam_pts[:, :, :3]
-            z = xyz[:, :, 2]  # depth in camera frame
+    pts_h = torch.cat([lidar_points, torch.ones(B, V, 1, device=device, dtype=dtype)], dim=-1)  # (B, V, 4)
 
-            # Camera → image coordinates
-            pix = torch.matmul(K_cam, xyz.transpose(1, 2)).transpose(1, 2)   # (B,V,3)
-            u = pix[:, :, 0] / (pix[:, :, 2] + 1e-12)
-            v = pix[:, :, 1] / (pix[:, :, 2] + 1e-12)
+    pixel_coords = torch.full((B, n_cam, V, 2), -1.0, dtype=dtype, device=device)
+    depth = torch.zeros((B, n_cam, V), dtype=dtype, device=device)
+    valid_mask = torch.zeros((B, n_cam, V), dtype=torch.bool, device=device)
 
-            # Validity mask (front of cam + inside image bounds)
-            mask = (z > 0) & (u >= 0) & (u < self.img_w) & (v >= 0) & (v < self.img_h)
+    for cam_idx in range(n_cam):
+        K_cam = K[:, cam_idx]
+        Rt_cam = Rt[:, cam_idx]
 
-            cam_uv_valid, cam_depth_valid = [], []
-            for b in range(B):
-                valid_idx = mask[b]
-                u_valid = u[b, valid_idx]
-                v_valid = v[b, valid_idx]
-                d_valid = z[b, valid_idx]
-                uv_valid = torch.stack([u_valid, v_valid], dim=-1)  # (N_valid,2)
-                cam_uv_valid.append(uv_valid)
-                cam_depth_valid.append(d_valid)
+        cam_pts = torch.matmul(Rt_cam, pts_h.unsqueeze(-1)).squeeze(-1)
+        xyz = cam_pts[:, :, :3]
+        z = xyz[:, :, 2]
 
-            proj_uv_all.append(cam_uv_valid)
-            depth_all.append(cam_depth_valid)
+        pix = torch.matmul(K_cam, xyz.transpose(1, 2)).transpose(1, 2)
+        denom = pix[:, :, 2].clamp(min=1e-12)
+        u = pix[:, :, 0] / denom
+        v = pix[:, :, 1] / denom
 
-        return proj_uv_all, depth_all
+        valid = (z > 0) & (u >= 0) & (u < img_w) & (v >= 0) & (v < img_h)
+
+        depth[:, cam_idx] = z
+        valid_mask[:, cam_idx] = valid
+
+        coords = torch.stack([u, v], dim=-1)
+        coords = torch.where(valid.unsqueeze(-1), coords, torch.full_like(coords, -1.0))
+        pixel_coords[:, cam_idx] = coords
+
+    return pixel_coords, depth, valid_mask
 
 
 
 
 def scale_pixel_coords(pixel_coords: torch.Tensor,
-                       origin_img_size: Sequence[int],
-                       new_img_size: Sequence[int]) -> torch.Tensor:
-    W_orig, H_orig = origin_img_size
-    W_new, H_new = new_img_size
-    scale = torch.as_tensor([W_new / W_orig, H_new / H_orig],
-                            dtype=pixel_coords.dtype,
-                            device=pixel_coords.device)
-    view_shape = [1] * (pixel_coords.dim() - 1) + [2]
-    scale = scale.view(*view_shape)
+                       origin_img_sizes: Sequence[Sequence[int]] | torch.Tensor,
+                       new_img_size: Sequence[int] | int) -> torch.Tensor:
+    """Scale pixel coordinates from their original resolution to a new resolution.
+
+    Args:
+        pixel_coords: tensor of shape (B, ..., 2) representing (u, v) coordinates.
+        origin_img_sizes: iterable of (H, W) or tensor with shape (B, 2).
+        new_img_size: target size. Either (H_new, W_new) tuple or single integer for square resize.
+    """
+
+    if isinstance(new_img_size, int):
+        H_new = W_new = float(new_img_size)
+    else:
+        H_new, W_new = map(float, new_img_size)
+
+    if torch.is_tensor(origin_img_sizes):
+        origin_hw = origin_img_sizes.to(device=pixel_coords.device, dtype=pixel_coords.dtype)
+        if origin_hw.dim() == 1:
+            origin_hw = origin_hw.unsqueeze(0)
+    else:
+        origin_hw = torch.as_tensor(origin_img_sizes, dtype=pixel_coords.dtype, device=pixel_coords.device)
+        if origin_hw.dim() == 1:
+            origin_hw = origin_hw.unsqueeze(0)
+
+    if origin_hw.shape[-1] != 2:
+        raise ValueError("origin_img_sizes must have shape (B, 2) in (H, W) order.")
+
+    H_orig = origin_hw[:, 0].clamp(min=1e-6)
+    W_orig = origin_hw[:, 1].clamp(min=1e-6)
+
+    scale_h = H_new / H_orig
+    scale_w = W_new / W_orig
+    scale = torch.stack([scale_w, scale_h], dim=-1)
+
+    expand_dims = [1] * (pixel_coords.dim() - 2) + [2]
+    scale = scale.view(scale.shape[0], *expand_dims)
+
     return pixel_coords * scale
 
 
@@ -109,9 +140,6 @@ class FeatureFusionModel(nn.Module):
         self.image_encoder = image_encoder
         self.pcd_encoder = pcd_encoder
 
-        # Camera + LiDAR Extrinsics
-        self.projector = MultiCameraPointProjector()
-
         # MLP
         self.mlp = nn.Sequential(
             nn.Linear(point_feat_dim + patch_tok_dim, mlp_hidden_dim),
@@ -119,34 +147,47 @@ class FeatureFusionModel(nn.Module):
             nn.Linear(mlp_hidden_dim, output_dim)
         )
 
-    def forward(self, patch_tokens, voxel_features, voxel_coords, image_sizes, K, Rt):
+    def forward(self, patch_tokens, voxel_features, voxel_coords, image_sizes, cam_intrinsics, cam2lidar_extrinsics):
         B, V, _ = voxel_features.shape
         _, num_views, M, dim = patch_tokens.shape
 
-        # 1. Project 3D → 2D
-        pixel_coords = self.projector(voxel_coords, K, Rt)     # List of (B, V, 2) for each camera
+        pixel_coords, _, valid_mask = multi_camera_projector(
+            voxel_coords, cam_intrinsics, cam2lidar_extrinsics, image_sizes
+        )
 
-        # 2. Scale pixel coords to resized image
-        pixel_coords = scale_pixel_coords(pixel_coords, image_sizes[0], (self.image_encoder.resize_size, self.image_encoder.resize_size))
+        origin_sizes = torch.as_tensor(image_sizes, dtype=pixel_coords.dtype, device=pixel_coords.device)
+        pixel_coords = scale_pixel_coords(
+            pixel_coords,
+            origin_sizes,
+            (self.image_encoder.resize_size, self.image_encoder.resize_size)
+        )
 
-        # 3. Convert to patch grid indices
+        grid_size = self.image_encoder.resize_size // self.image_encoder.patch_size
+        total_patches = grid_size * grid_size
+
         patch_xy = (pixel_coords / float(self.image_encoder.patch_size)).long()
-        grid_h = grid_w = self.image_encoder.resize_size // self.image_encoder.patch_size
-        patch_xy[..., 0] = patch_xy[..., 0].clamp(0, grid_w - 1)
-        patch_xy[..., 1] = patch_xy[..., 1].clamp(0, grid_h - 1)
+        patch_xy[..., 0] = patch_xy[..., 0].clamp(0, grid_size - 1)
+        patch_xy[..., 1] = patch_xy[..., 1].clamp(0, grid_size - 1)
 
-        # 4. Extract per-point patch tokens
-        all_views = []
+        point_patch_tokens = []
+        valid_mask = valid_mask[:, :num_views]  # ensure mask aligns with available views
+
         for view in range(num_views):
-            tokens = patch_tokens[:, view]  # (B, M, 384)
-            flat_idx = patch_xy[:, :, 0] * grid_w + patch_xy[:, :, 1]  # (B, V)
-            tokens_view = torch.stack([tokens[b, flat_idx[b]].clone() for b in range(B)], dim=0)  # (B, V, 384)
-            all_views.append(tokens_view)
-        point_patch_tokens = torch.stack(all_views, dim=2)  # (B, V, num_views, 384)
+            tokens = patch_tokens[:, view]  # (B, M, dim)
+            idx_uv = patch_xy[:, view]  # (B, V, 2)
 
-        # 5. Average over views
-        fused_img_feat = point_patch_tokens.mean(dim=2)  # (B, V, 384)
+            flat_idx = (idx_uv[..., 1] * grid_size + idx_uv[..., 0]).clamp(0, total_patches - 1)
+            gather_idx = flat_idx.unsqueeze(-1).expand(-1, -1, dim)
+            gathered = torch.gather(tokens, dim=1, index=gather_idx)
+            point_patch_tokens.append(gathered)
 
-        # 6. Fuse 2D + 3D features
-        fused = torch.cat([voxel_features, fused_img_feat], dim=-1)  # (B, V, 64+384)
-        return self.mlp(fused)  # (B, V, output_dim)
+        point_patch_tokens = torch.stack(point_patch_tokens, dim=1)  # (B, num_views, V, dim)
+
+        mask = valid_mask[:, :num_views].unsqueeze(-1)
+        mask = mask.to(point_patch_tokens.dtype)
+        masked_tokens = point_patch_tokens * mask
+        valid_counts = mask.sum(dim=1).clamp(min=1.0)
+        fused_img_feat = masked_tokens.sum(dim=1) / valid_counts  # (B, V, dim)
+
+        fused = torch.cat([voxel_features, fused_img_feat], dim=-1)
+        return self.mlp(fused)

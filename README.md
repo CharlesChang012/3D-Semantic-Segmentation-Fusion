@@ -28,6 +28,8 @@ $ cd <Path/To/dataset/nuscenes>
 ```bash
 $ wget https://www.nuscenes.org/data/v1.0-mini.tgz
 $ tar -xvzf v1.0-mini.tgz
+$ wget https://www.nuscenes.org/data/nuScenes-lidarseg-mini-v1.0.tar.bz2   
+$ tar -xvjf nuScenes-lidarseg-mini-v1.0.tar.bz2
 ```
 ### 1.3 Training set
 ```bash

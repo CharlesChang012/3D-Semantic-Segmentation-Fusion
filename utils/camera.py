@@ -32,7 +32,7 @@ class ImageFeatureEncoder:
         patch_features, global_features = [], []
 
         with torch.inference_mode(), torch.autocast(
-            device_type=self.device,
+            device_type=self.device.type,
             dtype=torch.float16,
         ):
             for img in images:
