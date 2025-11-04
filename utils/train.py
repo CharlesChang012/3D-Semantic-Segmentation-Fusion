@@ -4,6 +4,8 @@ import torch.optim as optim
 from tqdm import tqdm
 import time
 import os
+# Import evaluation metrics
+from utils.evaluation import compute_confusion_matrix, compute_iou, per_class_accuracy, overall_accuracy, precision_recall_f1
 
 def train_model(dataloaders, image_encoder, pcd_encoder, model, optimizer, criterion, device,
                 save_dir=None, num_epochs=15, fusion_model_name='3DSSF'):
@@ -153,8 +155,27 @@ def test_model(dataloaders, image_encoder, pcd_encoder, model, criterion, device
             'Acc': running_corrects.double() / total_points
         })
 
+    # Evaluation Metrics
     test_loss = running_loss / total_points
     test_acc = running_corrects.double() / total_points
-    print(f"\n✅ Test Loss: {test_loss:.4f}, Test Accuracy: {test_acc:.4f}")
 
-    return test_loss, test_acc
+    confusion_matrix = compute_confusion_matrix(preds, labels_masked, num_classes=outputs.shape[-1])
+    iou_per_class, miou = compute_iou(confusion_matrix)
+    acc_per_class, mean_acc = per_class_accuracy(confusion_matrix)
+    precision, recall, f1 = precision_recall_f1(confusion_matrix)
+
+    print("\n✅ Test Results")
+    print(f"Loss: {test_loss:.4f}, Overall Acc: {test_acc:.4f}")
+    print(f"Mean IoU: {miou:.4f}, Mean Per-Class Acc: {mean_acc:.4f}")
+    print(f"Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}")
+
+    test_result = {
+        'loss': test_loss,
+        'overall_acc': test_acc.item(),
+        'mean_iou': miou.item(),
+        'mean_per_class_acc': mean_acc.item(),
+        'precision': precision.item(),
+        'recall': recall.item(),
+        'f1': f1.item()
+    }
+    return test_result
