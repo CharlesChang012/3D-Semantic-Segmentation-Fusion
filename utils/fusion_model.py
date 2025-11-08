@@ -51,10 +51,10 @@ def multi_camera_projector(lidar_points, cam_intrinsics, cam2lidar_extrinsics, i
     img_sizes_tensor = torch.as_tensor(image_sizes, dtype=dtype, device=device)  # (B, 2) in (H, W)
     if img_sizes_tensor.shape != (B, 2):
         raise ValueError("image_sizes must be of shape (B, 2) where each entry is (H, W).")
-    img_h = img_sizes_tensor[:, 0].view(B, 1, 1)
-    img_w = img_sizes_tensor[:, 1].view(B, 1, 1)
+    img_h = img_sizes_tensor[:, 0].view(B, 1)
+    img_w = img_sizes_tensor[:, 1].view(B, 1)
 
-    pts_h = torch.cat([lidar_points, torch.ones(B, V, 1, device=device, dtype=dtype)], dim=-1)  # (B, V, 4)
+    pts_h = torch.cat([lidar_points, torch.ones(B, V, 1, device=device, dtype=torch.float32)], dim=-1)  # (B, V, 4)
 
     pixel_coords = torch.full((B, n_cam, V, 2), -1.0, dtype=dtype, device=device)
     depth = torch.zeros((B, n_cam, V), dtype=dtype, device=device)
@@ -62,9 +62,10 @@ def multi_camera_projector(lidar_points, cam_intrinsics, cam2lidar_extrinsics, i
 
     for cam_idx in range(n_cam):
         K_cam = K[:, cam_idx]
-        Rt_cam = Rt[:, cam_idx]
+        Rt_cam = Rt[:, cam_idx] # (B, 4, 4)
+        Rt_cam = Rt_cam.float()
 
-        cam_pts = torch.matmul(Rt_cam, pts_h.unsqueeze(-1)).squeeze(-1)
+        cam_pts = torch.matmul(Rt_cam.unsqueeze(1), pts_h.unsqueeze(-1)).squeeze(-1)    # (B, 1, 4, 4) @ (B, V, 4, 1) -> (B, V, 4, 1).squeeze(-1) -> (B, V, 4)
         xyz = cam_pts[:, :, :3]
         z = xyz[:, :, 2]
 
@@ -137,8 +138,10 @@ def scale_pixel_coords(pixel_coords: torch.Tensor,
 # -------------------------
 class FeatureFusionModel(nn.Module):
     def __init__(self, image_encoder=None, pcd_encoder=None, point_feat_dim=64, patch_tok_dim=384, mlp_hidden_dim=256,
-                 output_dim=16):
+                 output_dim=16, device="cuda"):
         super().__init__()
+
+        self.device = device
 
         # Feature encoders
         self.image_encoder = image_encoder
@@ -153,14 +156,14 @@ class FeatureFusionModel(nn.Module):
 
     def forward(self, patch_tokens, voxel_features, voxel_coords, image_sizes, cam_intrinsics, cam2lidar_extrinsics):
         B, V, _ = voxel_features.shape
-        _, num_views, M, dim = patch_tokens.shape
+        _, num_cams, M, dim = patch_tokens.shape
 
         # 1. Project 3D → 2D
         pixel_coords, _, valid_mask = multi_camera_projector(
             voxel_coords, cam_intrinsics, cam2lidar_extrinsics, image_sizes
         )
 
-        origin_sizes = torch.as_tensor(image_sizes, dtype=pixel_coords.dtype, device=pixel_coords.device)
+        origin_sizes = torch.as_tensor(image_sizes, dtype=pixel_coords.dtype, device=self.device)
         pixel_coords = scale_pixel_coords(
             pixel_coords,
             origin_sizes,
@@ -175,24 +178,27 @@ class FeatureFusionModel(nn.Module):
         patch_xy[..., 1] = patch_xy[..., 1].clamp(0, grid_size - 1)
 
         point_patch_tokens = []
-        valid_mask = valid_mask[:, :num_views]  # ensure mask aligns with available views
+        valid_mask = valid_mask[:, :num_cams]  # ensure mask aligns with available views
 
-        for view in range(num_views):
-            tokens = patch_tokens[:, view]  # (B, M, dim)
-            idx_uv = patch_xy[:, view]  # (B, V, 2)
+        for cam in range(num_cams):
+            tokens = patch_tokens[:, cam].to(self.device)  # (B, M, dim)
+            idx_uv = patch_xy[:, cam].to(self.device)  # (B, V, 2)
 
             flat_idx = (idx_uv[..., 1] * grid_size + idx_uv[..., 0]).clamp(0, total_patches - 1)
             gather_idx = flat_idx.unsqueeze(-1).expand(-1, -1, dim)
-            gathered = torch.gather(tokens, dim=1, index=gather_idx)
+            gathered = torch.gather(tokens, dim=1, index=gather_idx) # (B, V, dim)
             point_patch_tokens.append(gathered)
 
-        point_patch_tokens = torch.stack(point_patch_tokens, dim=1)  # (B, num_views, V, dim)
+        point_patch_tokens = torch.stack(point_patch_tokens, dim=1)  # (B, num_cams, V, dim)
 
-        mask = valid_mask[:, :num_views].unsqueeze(-1)
-        mask = mask.to(point_patch_tokens.dtype)
+        mask = valid_mask[:, :num_cams].unsqueeze(-1)
+        mask = mask.to(point_patch_tokens.dtype).to(self.device)
+
         masked_tokens = point_patch_tokens * mask
         valid_counts = mask.sum(dim=1).clamp(min=1.0)
         fused_img_feat = masked_tokens.sum(dim=1) / valid_counts  # (B, V, dim)
-
+   
         fused = torch.cat([voxel_features, fused_img_feat], dim=-1)
-        return self.mlp(fused)
+        voxel_scores = self.mlp(fused)  # (B, V, C)
+        point_scores, _, _ = self.pcd_encoder.devoxelize(voxel_scores)
+        return point_scores

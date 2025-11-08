@@ -63,27 +63,19 @@ def train_model(dataloaders, image_encoder, pcd_encoder, model, optimizer, crite
                     # Forward pass through fusion model
                     outputs = model(patch_tokens, voxel_features, voxel_coords, image_sizes, cam_intrinsics, cam2lidar_extrinsics)  # (B, V, num_classes)
 
-                    # Compute loss using mask
-                    loss, ce_loss, lovasz_loss = criterion(outputs, labels, mask=mask)
+                    # Compute loss and predictions using mask
+                    total_loss, ce_loss, lovasz_loss, predictions, gt_label_mask = criterion(outputs, labels, mask=mask)
 
-                    # Compute prediction accuracy
-                    outputs_flat = outputs.view(-1, outputs.shape[-1])
-                    labels_flat = labels[..., 0].view(-1)
-                    mask_flat = mask.view(-1)
-
-                    outputs_masked = outputs_flat[mask_flat]  # (N_valid, C)
-                    labels_masked = labels_flat[mask_flat]    # (N_valid,)
-
-                    _, preds = torch.max(outputs_masked, dim=1) 
 
                 if phase == 'train':
                     optimizer.zero_grad()
-                    loss.backward()
+                    ce_loss.backward(retain_graph=True)
+                    lovasz_loss.backward()
                     optimizer.step()
 
-                running_loss += loss.item() * labels_masked.size(0)
-                running_corrects += torch.sum(preds == labels_masked)
-                total_points += labels_masked.size(0)
+                running_loss += total_loss.item()
+                running_corrects += torch.sum(predictions == gt_label_mask)
+                total_points += gt_label_mask.size(0)
 
                 # Update tqdm bar description with current loss and accuracy
                 dataloader_tqdm.set_postfix({

@@ -45,6 +45,7 @@ def main():
         patch_tok_dim=384,
         mlp_hidden_dim=256,
         output_dim=config['train_params']['mlp_class'],
+        device=device
     ).to(device)
 
     # Initialize Optimizer
