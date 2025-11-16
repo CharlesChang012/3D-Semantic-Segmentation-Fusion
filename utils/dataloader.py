@@ -168,21 +168,50 @@ class nuScenes(Dataset):
 
         return data_dict
 
-def create_dataloaders(config):
-    """Create DataLoaders for train, val, and test splits."""
-    batch_size = config['dataset_params']['train_data_loader']['batch_size']
-    shuffle = config['dataset_params']['train_data_loader']['shuffle']
-    num_workers = config['dataset_params']['train_data_loader']['num_workers']
+# def create_dataloaders(config):
+#     """Create DataLoaders for train, val, and test splits."""
+#     batch_size = config['dataset_params']['train_data_loader']['batch_size']
+#     shuffle = config['dataset_params']['train_data_loader']['shuffle']
+#     num_workers = config['dataset_params']['train_data_loader']['num_workers']
 
-    datasets = {split: nuScenes(config, imageset=split) for split in ['train', 'val', 'test']}
-    dataloaders = {
-        split: DataLoader(datasets[split], 
-                          batch_size=batch_size,
-                          shuffle=(split=='train'),
-                          num_workers=num_workers,
-                          collate_fn=fusion_collate_fn)
-        for split in ['train', 'val', 'test']
-    }
+#     datasets = {split: nuScenes(config, imageset=split) for split in ['train', 'val', 'test']}
+#     dataloaders = {
+#         split: DataLoader(datasets[split], 
+#                           batch_size=batch_size,
+#                           shuffle=(split=='train'),
+#                           num_workers=num_workers,
+#                           collate_fn=fusion_collate_fn)
+#         for split in ['train', 'val', 'test']
+#     }
+#     return dataloaders
+
+def create_dataloaders(config):
+    """
+    Create flexible DataLoaders for train, val, and test based on config.
+    """
+
+    dataloaders = {}
+    splits = ["train", "val", "test"]
+
+    for split in splits:
+        loader_cfg = config['dataset_params'][f"{split}_data_loader"]
+
+        batch_size  = loader_cfg['batch_size']
+        shuffle     = loader_cfg['shuffle']
+        num_workers = loader_cfg['num_workers']
+
+        # Create dataset
+        dataset = nuScenes(config, imageset=split)
+
+        # Create dataloader
+        dataloaders[split] = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            num_workers=num_workers,
+            collate_fn=fusion_collate_fn,
+        )
+
     return dataloaders
 
 def fusion_collate_fn(batch):

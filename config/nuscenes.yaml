@@ -24,6 +24,12 @@ dataset_params:
     shuffle: False
     num_workers: 0
 
+  test_data_loader:
+    data_path: "/scratch/rob535f25s001_class_root/rob535f25s001_class/pohsun/datasets/nuscenes/"
+    batch_size: 1
+    shuffle: False
+    num_workers: 0
+
   lidar:
     voxel_size: 0.1
     point_cloud_range: [ -50, -50, -5, 50, 50, 3 ]
@@ -37,11 +43,11 @@ train_params:
   save_dir: "./checkpoints/nuscenes/3DSSF_dinov3/"
 
   # Feature encoder
-  image_encoder: 'dinov3'
+  image_encoder: 'dinov3' # [dinov2, dinov3]
 
   # Model params
   mlp_class: 17
-  max_num_epochs: 10
+  max_num_epochs: 1
   learning_rate: 0.002
   optimizer: AdamW # [SGD, Adam, AdamW]
   lr_scheduler: CosineAnnealingLR  # [StepLR, ReduceLROnPlateau, CosineAnnealingLR, CosineAnnealingWarmRestarts]
