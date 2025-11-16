@@ -58,3 +58,8 @@ train_params:
   lambda_seg2d: 1
   lambda_xm: 0.05
   lambda_lovasz: 1
+
+###################
+## Test params
+test_params:
+  checkpoint_path: "./checkpoints/nuscenes/3DSSF_dinov3/3DSSF.pth"

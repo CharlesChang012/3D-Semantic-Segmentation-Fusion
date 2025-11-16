@@ -168,23 +168,6 @@ class nuScenes(Dataset):
 
         return data_dict
 
-# def create_dataloaders(config):
-#     """Create DataLoaders for train, val, and test splits."""
-#     batch_size = config['dataset_params']['train_data_loader']['batch_size']
-#     shuffle = config['dataset_params']['train_data_loader']['shuffle']
-#     num_workers = config['dataset_params']['train_data_loader']['num_workers']
-
-#     datasets = {split: nuScenes(config, imageset=split) for split in ['train', 'val', 'test']}
-#     dataloaders = {
-#         split: DataLoader(datasets[split], 
-#                           batch_size=batch_size,
-#                           shuffle=(split=='train'),
-#                           num_workers=num_workers,
-#                           collate_fn=fusion_collate_fn)
-#         for split in ['train', 'val', 'test']
-#     }
-#     return dataloaders
-
 def create_dataloaders(config):
     """
     Create flexible DataLoaders for train, val, and test based on config.
