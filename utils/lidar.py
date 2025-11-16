@@ -118,52 +118,46 @@ class LiDARFeatureEncoder(nn.Module):
 
     def devoxelize(self, voxel_scores):
         """
-        Batched devoxelization: map voxel-level scores back to original point-level scores.
-
-        Args:
-            self.lidar_points_raw: (B, P, 4) torch.Tensor
-            self.voxel_raw:(B, P, 4) torch.Tensor
-            voxel_scores: (B, V_max, C) torch.Tensor voxel-level scores
-
-        Returns:
-            point_scores_padded: (B, P_max, C) torch.Tensor
-            voxel_indices_padded: (B, P_max) torch.LongTensor
-            mask: (B, P_max) torch.BoolTensor (True for valid points)
+        Differentiable devoxelization.
+        Maps voxel-level features back to point-level using nearest-neighbor
+        in pure PyTorch (keeps autograd graph).
         """
         B, V_max, C = voxel_scores.shape
         device = voxel_scores.device
 
-        # Collect per-sample results
         point_scores_list = []
         voxel_indices_list = []
         point_lengths = []
 
         for b in range(B):
-            lidar_pts = self.lidar_points_raw[b, :]        # (P, 4)
-            voxel_pts = self.voxel_raw[b, :]               # (V, 4)
-            voxel_feat = voxel_scores[b, :voxel_pts.shape[0]]  # (V, C)
+            lidar_pts = self.lidar_points_raw[b]      # (P,4)
+            voxel_pts = self.voxel_raw[b]             # (V,4)
+            P = lidar_pts.shape[0]
+            V = voxel_pts.shape[0]
 
-            pts_xyz = lidar_pts[:, :3].cpu().numpy()
-            voxel_xyz = voxel_pts[:, :3].cpu().numpy()
+            pts_xyz = lidar_pts[:, :3]                # (P,3)
+            voxel_xyz = voxel_pts[:, :3]              # (V,3)
 
-            # Step 1: find nearest voxel center for each point
-            nbrs = NearestNeighbors(n_neighbors=1, algorithm="auto").fit(voxel_xyz)
-            _, indices = nbrs.kneighbors(pts_xyz)
-            indices = indices.squeeze(1)  # (P,)
+            # --- pure PyTorch nearest neighbor ---
+            # Compute L2 distances between all points and voxels
+            # pts_xyz:   (P,3)
+            # voxel_xyz: (V,3)
+            # dist: (P,V)
+            dists = torch.cdist(pts_xyz, voxel_xyz)   # differentiable!
 
-            # Step 2: gather voxel scores for each point
-            voxel_scores_np = voxel_feat.detach().cpu().numpy()
-            point_scores_np = voxel_scores_np[indices]  # (P, C)
+            # nearest voxel index for each point
+            indices = torch.argmin(dists, dim=1)      # (P,)
 
-            # Step 3: convert back to torch
-            point_scores = torch.from_numpy(point_scores_np).to(device).float()
-            voxel_indices = torch.from_numpy(indices).to(device).long()
+            # gather voxel scores → point scores
+            # voxel_feat: (V,C) → (P,C)
+            voxel_feat = voxel_scores[b, :V]          # do NOT detach
+            point_scores = voxel_feat[indices]        # differentiable!
 
             point_scores_list.append(point_scores)
-            voxel_indices_list.append(voxel_indices)
-            point_lengths.append(point_scores.shape[0])
+            voxel_indices_list.append(indices)
+            point_lengths.append(P)
 
-        # Pad to max number of points across batch
+        # --- pad outputs ---
         P_max = max(point_lengths)
         point_scores_padded = torch.zeros((B, P_max, C), device=device)
         voxel_indices_padded = torch.zeros((B, P_max), device=device, dtype=torch.long)
@@ -173,9 +167,10 @@ class LiDARFeatureEncoder(nn.Module):
             P = point_lengths[b]
             point_scores_padded[b, :P] = point_scores_list[b]
             voxel_indices_padded[b, :P] = voxel_indices_list[b]
-            mask[b, :P] = 1
+            mask[b, :P] = True
 
         return point_scores_padded, voxel_indices_padded, mask
+
 
 if __name__ == "__main__":
     # Simulated LiDAR cloud

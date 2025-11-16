@@ -201,4 +201,5 @@ class FeatureFusionModel(nn.Module):
         fused = torch.cat([voxel_features, fused_img_feat], dim=-1)
         voxel_scores = self.mlp(fused)  # (B, V, C)
         point_scores, _, _ = self.pcd_encoder.devoxelize(voxel_scores)
+        
         return point_scores

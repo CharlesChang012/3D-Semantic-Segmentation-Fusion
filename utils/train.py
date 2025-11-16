@@ -69,8 +69,7 @@ def train_model(dataloaders, image_encoder, pcd_encoder, model, optimizer, crite
 
                 if phase == 'train':
                     optimizer.zero_grad()
-                    ce_loss.backward(retain_graph=True)
-                    lovasz_loss.backward()
+                    total_loss.backward()
                     optimizer.step()
 
                 running_loss += total_loss.item()
