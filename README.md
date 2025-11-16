@@ -37,8 +37,9 @@ $ wget -c "https://motional-nuscenes.s3.amazonaws.com/public/v1.0/v1.0-trainval0
 $ tar -xvzf v1.0-trainval01_blobs.tgz
 $ wget -c "https://motional-nuscenes.s3.amazonaws.com/public/v1.0/v1.0-trainval_meta.tgz"
 $ tar -xvzf v1.0-trainval_meta.tgz
+Download nuScenes-lidarseg all by logging into your account
 ```
-<!-- 2. Test set
+<!-- ### 1.4 Test set
 ```bash
 $ wget -c "https://motional-nuscenes.s3.amazonaws.com/public/v1.0/v1.0-test01_blobs.tgz"
 $ tar -xvzf v1.0-trainval01_blobs.tgz

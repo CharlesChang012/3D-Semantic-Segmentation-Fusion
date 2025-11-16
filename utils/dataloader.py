@@ -174,7 +174,8 @@ def create_dataloaders(config):
     """
 
     dataloaders = {}
-    splits = ["train", "val", "test"]
+    # splits = ["train", "val", "test"]
+    splits = ["train", "val"]
 
     for split in splits:
         loader_cfg = config['dataset_params'][f"{split}_data_loader"]

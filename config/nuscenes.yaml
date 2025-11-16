@@ -1,7 +1,8 @@
 # Config format schema number
 format_version: 0.1
 
-debug: True
+## Global debug flag
+debug: False # If set to True, use mini dataset
 
 ###################
 ## Dataset params
@@ -9,7 +10,6 @@ dataset_params:
   training_size: 1000
   dataset_type: "point_image_dataset_nus"
   pc_dataset_type: "nuScenes"
-  ignore_label: 0
   label_mapping: "./config/label_mapping/nuscenes.yaml"
   
   train_data_loader:
@@ -32,7 +32,6 @@ dataset_params:
 
   lidar:
     voxel_size: 0.1
-    point_cloud_range: [ -50, -50, -5, 50, 50, 3 ]
 
 
 ###################

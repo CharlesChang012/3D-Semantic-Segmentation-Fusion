@@ -21,7 +21,6 @@ class LiDARFeatureEncoder(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.voxel_size = config['dataset_params']['lidar']['voxel_size']
-        self.pc_range = config['dataset_params']['lidar']['point_cloud_range']
         # Load PTv3 backbone from the official repo
         self.ptv3 = PointTransformerV3(in_channels=4)
 
@@ -107,7 +106,6 @@ class LiDARFeatureEncoder(nn.Module):
         # Step 4: Compute voxel coordinates
         voxel_coords = np.floor(
             down_points / self.voxel_size
-            # (down_points - np.array(self.pc_range[:3])) / self.voxel_size
         ).astype(np.int32)
 
         # Step 5: Convert to torch
