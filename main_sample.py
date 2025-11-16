@@ -3,12 +3,13 @@ import os
 import torch
 import torch.nn as nn
 import yaml
+import numpy as np
 # Import utilities
 from utils.camera import ImageFeatureEncoder
 from utils.lidar import LiDARFeatureEncoder
 from utils.fusion_model import FeatureFusionModel
-from utils.train import train_model, test_model
-from utils.plot import plot_training_history
+from utils.plot import plot_cloud
+from utils.test import test_sample
 from utils.losses import CELSLoss
 from utils.dataloader import create_dataloaders
 
@@ -48,53 +49,27 @@ def main():
         device=device
     ).to(device)
 
-    # Initialize Optimizer
-    if config['train_params']['optimizer'] == 'AdamW':
-        optimizer = torch.optim.AdamW(model.parameters(), lr=config['train_params']['learning_rate'], weight_decay=config['train_params']['weight_decay'])
-    elif config['train_params']['optimizer'] == 'Adam':
-        optimizer = torch.optim.Adam(model.parameters(), lr=config['train_params']['learning_rate'], weight_decay=config['train_params']['weight_decay'])
-    else:
-        optimizer = torch.optim.SGD(model.parameters(), lr=config['train_params']['learning_rate'], momentum=config['train_params']['momentum'])
-
     # Initialize Loss function
     criterion = CELSLoss(ignore_index=-100) # Cross-Entropy + Lovasz
 
-    # ==============================#
-    #          Training Loop        #
-    # ==============================#
-    train_his, val_his = train_model(
-        dataloaders=dataloaders,
-        image_encoder=image_encoder,
-        pcd_encoder=pcd_encoder,
-        model=model,
-        optimizer=optimizer,
-        criterion=criterion,
-        device=device,
-        save_dir=config['train_params']['save_dir'],
-        num_epochs=config['train_params']['max_num_epochs'],
-        fusion_model_name='3DSSF'
-    )
-
-    # ==============================#
-    #     Plot Training History     #
-    # ==============================#
-    plot_training_history(train_his, val_his)
-
-    # ==============================#
-    #          Testing Loop         #
-    # ==============================#
     # Load best model
-    best_model_path = os.path.join(config['train_params']['save_dir'], '3DSSF.pth')
+    best_model_path = os.path.join(config['test_params']['checkpoint_path'], "3DSSF.pth")
     model.load_state_dict(torch.load(best_model_path, map_location=device))
 
-    test_result = test_model(
+    # ==============================#
+    #        Test One Sample        #
+    # ==============================#
+    test_sample_result = test_sample(
         dataloaders=dataloaders,
         image_encoder=image_encoder,
         pcd_encoder=pcd_encoder,
         model=model,
         criterion=criterion,
-        device=device
+        device=device,
     )
+ 
+    plot_cloud(test_sample_result['points'][0, :, :3], np.array(test_sample_result['predictions']), save_dir=config['test_params']['checkpoint_path'])
+
 
 if __name__ == "__main__":
     main()

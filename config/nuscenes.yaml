@@ -62,4 +62,4 @@ train_params:
 ###################
 ## Test params
 test_params:
-  checkpoint_path: "./checkpoints/nuscenes/3DSSF_dinov3/3DSSF.pth"
+  checkpoint_path: "./checkpoints/nuscenes/3DSSF_dinov3/"
