@@ -37,15 +37,16 @@ $ wget -c "https://motional-nuscenes.s3.amazonaws.com/public/v1.0/v1.0-trainval0
 $ tar -xvzf v1.0-trainval01_blobs.tgz
 $ wget -c "https://motional-nuscenes.s3.amazonaws.com/public/v1.0/v1.0-trainval_meta.tgz"
 $ tar -xvzf v1.0-trainval_meta.tgz
-Download nuScenes-lidarseg all by logging into your account
+$ wget -c "https://d36yt3mvayqw5m.cloudfront.net/public/nuscenes-lidarseg-v1.0/nuScenes-lidarseg-all-v1.0.tar.bz2"
+$ tar -xvjf nuScenes-lidarseg-all-v1.0.tar.bz2
 ```
-<!-- ### 1.4 Test set
+### 1.4 Test set
 ```bash
-$ wget -c "https://motional-nuscenes.s3.amazonaws.com/public/v1.0/v1.0-test01_blobs.tgz"
-$ tar -xvzf v1.0-trainval01_blobs.tgz
-$ wget -c "http://datasets.blockelite.cn/43.nuScenes/v1.0-test_meta.tgz"
-$ tar -xvzf v1.0-trainval_meta.tgz
-``` -->
+$ wget -c "https://motional-nuscenes.s3.amazonaws.com/public/v1.0/v1.0-test_blobs.tgz"
+$ tar -xvzf v1.0-test_blobs.tgz
+$ wget -c "https://d36yt3mvayqw5m.cloudfront.net/public/v1.0/v1.0-test_meta.tgz"
+$ tar -xvzf v1.0-test_meta.tgz
+```
 
 ## 2. Setup Guide
 
