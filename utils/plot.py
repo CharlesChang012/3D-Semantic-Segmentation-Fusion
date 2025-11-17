@@ -3,7 +3,7 @@ import torch
 import matplotlib.pyplot as plt
 import plotly
 import plotly.graph_objs as go
-
+import os
 
 def plot_training_history(train_his, val_his, save_dir=None):
     x = np.arange(len(train_his))

@@ -244,3 +244,31 @@ def fusion_collate_fn(batch):
         mask[i, :P] = 1
 
     return images, image_sizes, lidar_points_padded, labels_padded, mask, cam_intrinsics, cam2lidar_extrinsics
+
+def calculate_class_weights(dataloaders, device, num_classes, print_every=100):
+    # class counts directly on GPU
+    class_counts = torch.zeros(num_classes, device=device, dtype=torch.long)
+
+    for i, (_, _, _, labels, mask, _, _) in enumerate(dataloaders['train']):
+        labels = labels.to(device)
+        mask = mask.to(device)
+
+        # get valid labels (still on GPU)
+        valid_labels = labels[mask == 1]
+
+        # accumulate counts using bincount on GPU
+        batch_count = torch.bincount(valid_labels, minlength=num_classes)
+        class_counts += batch_count
+
+        # optional periodic printing
+        if (i + 1) % print_every == 0:
+            weights_temp = torch.sqrt(class_counts.max() / (class_counts + 1e-6))
+            print(f"[Batch {i+1}] Current class weights: {weights_temp.detach().cpu().numpy()}")
+
+    # compute final weights on GPU
+    class_weights = torch.sqrt(class_counts.max() / (class_counts + 1e-6))
+
+    print("\n=== FINAL CLASS WEIGHTS (GPU) ===")
+    print(class_weights.detach().cpu().numpy())
+
+    return class_weights.float()

@@ -3,6 +3,7 @@ import os
 import torch
 import torch.nn as nn
 import yaml
+import sys
 # Import utilities
 from utils.camera import ImageFeatureEncoder
 from utils.lidar import LiDARFeatureEncoder
@@ -10,19 +11,29 @@ from utils.fusion_model import FeatureFusionModel
 from utils.test import test_model
 from utils.losses import CELSLoss
 from utils.dataloader import create_dataloaders
+from utils.logger import Logger
 
 def main():
 
     # ==============================#
     #         Configurations        #
     # ==============================#
-    # Set device
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"🚀 Using device: {device}")
-
     # Load configuration file
     with open("config/nuscenes.yaml", "r") as f:
         config = yaml.safe_load(f)
+
+    # ==============================#
+    #             Logger            #
+    # ==============================#
+    sys.stdout = Logger(config['train_params']['save_dir'], "test.log")
+    sys.stderr = Logger(config['train_params']['save_dir'], "test.log")
+
+    # ==============================#
+    #            Set device         #
+    # ==============================#
+    # Set device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"🚀 Using device: {device}")
 
     # ==============================#
     #          Dataset Setup        #
@@ -47,15 +58,17 @@ def main():
         device=device
     ).to(device)
 
+    # Load best model
+    best_model_path = os.path.join(config['test_params']['checkpoint_path'], "3DSSF.pth")
+    model.load_state_dict(torch.load(best_model_path, map_location=device))
+
     # Initialize Loss function
-    criterion = CELSLoss(ignore_index=-100) # Cross-Entropy + Lovasz
+    class_weights = torch.tensor(config['dataset_params']['class_weights'], dtype=torch.float32, device=device)
+    criterion = CELSLoss(weight=class_weights, ignore_index=-100) # Cross-Entropy + Lovasz
 
     # ==============================#
     #          Testing Loop         #
     # ==============================#
-    # Load best model
-    best_model_path = os.path.join(config['test_params']['checkpoint_path'], "3DSSF.pth")
-    model.load_state_dict(torch.load(best_model_path, map_location=device))
 
     test_result = test_model(
         dataloaders=dataloaders,

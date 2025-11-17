@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import yaml
 import numpy as np
+import sys
 # Import utilities
 from utils.camera import ImageFeatureEncoder
 from utils.lidar import LiDARFeatureEncoder
@@ -12,19 +13,29 @@ from utils.plot import plot_cloud
 from utils.test import test_sample
 from utils.losses import CELSLoss
 from utils.dataloader import create_dataloaders
+from utils.logger import Logger
 
 def main():
 
     # ==============================#
     #         Configurations        #
     # ==============================#
-    # Set device
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"🚀 Using device: {device}")
-
     # Load configuration file
     with open("config/nuscenes.yaml", "r") as f:
         config = yaml.safe_load(f)
+
+    # ==============================#
+    #             Logger            #
+    # ==============================#
+    sys.stdout = Logger(config['train_params']['save_dir'], "test_sample.log")
+    sys.stderr = Logger(config['train_params']['save_dir'], "test_sample.log")
+
+    # ==============================#
+    #            Set device         #
+    # ==============================#
+    # Set device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"🚀 Using device: {device}")
 
     # ==============================#
     #          Dataset Setup        #
@@ -48,13 +59,15 @@ def main():
         output_dim=config['train_params']['mlp_class'],
         device=device
     ).to(device)
-
-    # Initialize Loss function
-    criterion = CELSLoss(ignore_index=-100) # Cross-Entropy + Lovasz
-
+    
     # Load best model
     best_model_path = os.path.join(config['test_params']['checkpoint_path'], "3DSSF.pth")
     model.load_state_dict(torch.load(best_model_path, map_location=device))
+
+    # Initialize Loss function
+    class_weights = torch.tensor(config['dataset_params']['class_weights'], dtype=torch.float32, device=device)
+    criterion = CELSLoss(weight=class_weights, ignore_index=-100) # Cross-Entropy + Lovasz
+
 
     # ==============================#
     #        Test One Sample        #

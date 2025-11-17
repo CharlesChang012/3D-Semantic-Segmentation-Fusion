@@ -2,11 +2,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from LovaszSoftmax.pytorch.lovasz_losses import lovasz_softmax_flat
+from typing import List, Optional
 
 class CELSLoss(nn.Module):
     """
     Combines Cross-Entropy loss and Lovasz-Softmax loss for point-level segmentation.
     Handles masks for padded or missing points robustly.
+    weight: class weights for Cross-Entropy 
     """
     def __init__(self, weight=None, ignore_index=-100):
         super().__init__()

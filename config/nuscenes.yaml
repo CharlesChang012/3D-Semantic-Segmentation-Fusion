@@ -4,6 +4,9 @@ format_version: 0.1
 ## Global debug flag
 debug: False # If set to True, use mini dataset
 
+## Logging paths
+log_path: "./logs/"
+
 ###################
 ## Dataset params
 dataset_params:
@@ -11,23 +14,26 @@ dataset_params:
   dataset_type: "point_image_dataset_nus"
   pc_dataset_type: "nuScenes"
   label_mapping: "./config/label_mapping/nuscenes.yaml"
-  
+  class_weights: [1.0643362, 5.6544957, 43.08474, 10.936715, 4.01532, 11.036977,
+                  20.01939, 10.382197, 27.305088, 9.340371, 4.9004316, 1.0,
+                  10.900745, 2.1310449, 1.5394714, 1.4620636, 1.4119271]
+
   train_data_loader:
-    data_path: "/scratch/rob535f25s001_class_root/rob535f25s001_class/pohsun/datasets/nuscenes/"
+    data_path: "/scratch/eecs442f25_class_root/eecs442f25_class/pohsun/datasets/nuscenes/"
     batch_size: 12
     shuffle: True
     num_workers: 0
 
   val_data_loader:
-    data_path: "/scratch/rob535f25s001_class_root/rob535f25s001_class/pohsun/datasets/nuscenes/"
+    data_path: "/scratch/eecs442f25_class_root/eecs442f25_class/pohsun/datasets/nuscenes/"
     batch_size: 12
-    shuffle: False
+    shuffle: True
     num_workers: 0
 
   test_data_loader:
-    data_path: "/scratch/rob535f25s001_class_root/rob535f25s001_class/pohsun/datasets/nuscenes/"
+    data_path: "/scratch/eecs442f25_class_root/eecs442f25_class/pohsun/datasets/nuscenes/"
     batch_size: 1
-    shuffle: False
+    shuffle: True
     num_workers: 0
 
   lidar:
@@ -46,7 +52,7 @@ train_params:
 
   # Model params
   mlp_class: 17
-  max_num_epochs: 1
+  max_num_epochs: 10
   learning_rate: 0.002
   optimizer: AdamW # [SGD, Adam, AdamW]
   lr_scheduler: CosineAnnealingLR  # [StepLR, ReduceLROnPlateau, CosineAnnealingLR, CosineAnnealingWarmRestarts]

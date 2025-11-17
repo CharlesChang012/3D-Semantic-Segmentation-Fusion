@@ -131,7 +131,7 @@ def test_sample(dataloaders, image_encoder, pcd_encoder, model, criterion, devic
     # 1. Load a single batch
     # ------------------------------------------------
     model.eval()
-    batch = next(iter(dataloaders["test"]))
+    batch = next(iter(dataloaders["train"]))    #TODO: Change back to 'test'
 
     (images,
      image_sizes,
