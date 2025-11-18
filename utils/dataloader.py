@@ -272,3 +272,17 @@ def calculate_class_weights(dataloaders, device, num_classes, print_every=100):
     print(class_weights.detach().cpu().numpy())
 
     return class_weights.float()
+
+def load_class_names(config_path, use_16_classes=True):
+    with open(config_path, "r") as f:
+        config = yaml.safe_load(f)
+
+    if use_16_classes:
+        class_dict = config["labels_16"]
+    else:
+        class_dict = config["labels"]
+
+    # keys from YAML are strings → convert to int
+    class_names = {int(k): v for k, v in class_dict.items()}
+
+    return class_names
