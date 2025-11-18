@@ -60,8 +60,8 @@ def main():
     ).to(device)
 
     # Load best model to continue training
-    best_model_path = os.path.join(config['train_params']['checkpoint_path'], "3DSSF.pth")
-    model.load_state_dict(torch.load(best_model_path, map_location=device))
+    # best_model_path = os.path.join(config['train_params']['checkpoint_path'], "3DSSF.pth")
+    # model.load_state_dict(torch.load(best_model_path, map_location=device))
 
     # Initialize Optimizer
     if config['train_params']['optimizer'] == 'AdamW':
@@ -73,7 +73,7 @@ def main():
 
     # Initialize Loss function
     class_weights = torch.tensor(config['dataset_params']['class_weights'], dtype=torch.float32, device=device)
-    criterion = CELSLoss(weight=class_weights, ignore_index=-100) # Cross-Entropy + Lovasz
+    criterion = CELSLoss(weight=class_weights, ignore_index=0) # Cross-Entropy + Lovasz
 
     # ==============================#
     #          Training Loop        #

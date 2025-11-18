@@ -234,15 +234,16 @@ def fusion_collate_fn(batch):
     pcd_feat_dim = lidar_list[0].shape[1]       # 4
 
     lidar_points_padded = torch.zeros((B, max_P, pcd_feat_dim), dtype=torch.float32)
-    labels_padded = torch.full((B, max_P), -100, dtype=torch.long)  # ignore_index
+    labels_padded = torch.full((B, max_P), 0, dtype=torch.long)  # ignore_index: 0
     mask = torch.zeros((B, max_P), dtype=torch.bool)
     
     for i in range(B):
         P = lidar_list[i].shape[0]
         lidar_points_padded[i, :P] = lidar_list[i]
         labels_padded[i, :P] = labels_list[i]
-        mask[i, :P] = 1
-
+        valid_mask = (labels_list[i] != 0)   # ignore noise class 0
+        mask[i, :P] = valid_mask
+    
     return images, image_sizes, lidar_points_padded, labels_padded, mask, cam_intrinsics, cam2lidar_extrinsics
 
 def calculate_class_weights(dataloaders, device, num_classes, print_every=100):
@@ -283,6 +284,6 @@ def load_class_names(config_path, use_16_classes=True):
         class_dict = config["labels"]
 
     # keys from YAML are strings → convert to int
-    class_names = {int(k): v for k, v in class_dict.items()}
+    class_names = {int(k): v for k, v in class_dict.items() if int(k) != 0}     # ignore label 0 : noise
 
     return class_names

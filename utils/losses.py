@@ -10,10 +10,10 @@ class CELSLoss(nn.Module):
     Handles masks for padded or missing points robustly.
     weight: class weights for Cross-Entropy 
     """
-    def __init__(self, weight=None, ignore_index=-100):
+    def __init__(self, weight=None, ignore_index=0):
         super().__init__()
-        self.ce_loss = nn.CrossEntropyLoss(weight=weight, ignore_index=ignore_index)
-        self.ignore_index = ignore_index
+        self.ce_loss = nn.CrossEntropyLoss(weight=weight)
+        self.ignore_index = ignore_index    # noise class
 
     def forward(self, pred_scores, gt_labels, mask=None):
         """
@@ -49,15 +49,20 @@ class CELSLoss(nn.Module):
             pred_scores_flat = pred_scores.reshape(-1, C)
             gt_labels_flat = gt_labels.reshape(-1)
 
+        # Further filter out ignored labels (noise label 0)
+        valid_mask = gt_labels_flat != self.ignore_index
+        pred_probs_flat = F.softmax(pred_scores_flat, dim=-1)
+        pred_probs_flat_valid = pred_probs_flat[valid_mask]
+        gt_labels_flat_valid = gt_labels_flat[valid_mask]   # [1-16]
+
         # Cross-Entropy Loss
-        ce_loss = self.ce_loss(pred_scores_flat, gt_labels_flat)
+        ce_loss = self.ce_loss(pred_scores_flat, gt_labels_flat_valid - 1)  # shift labels to [0, C-1] for CE
 
         # Lovasz Loss on full batch (B, P, C)
-        lovasz_loss = lovasz_softmax_flat(pred_scores_flat, gt_labels_flat)
-        
+        lovasz_loss = lovasz_softmax_flat(pred_probs_flat_valid, gt_labels_flat_valid - 1)  # Lovasz expects labels in [0, C-1]
+
         # Calculate predictions
-        probs = F.softmax(pred_scores_flat, dim=-1)
-        predictions = torch.argmax(probs, dim=-1)
+        predictions = torch.argmax(pred_probs_flat_valid, dim=-1) + 1  # shift back to original labels [1-16]
 
         total_loss = ce_loss + lovasz_loss
-        return total_loss, ce_loss, lovasz_loss, predictions, gt_labels_flat
+        return total_loss, ce_loss, lovasz_loss, predictions, gt_labels_flat_valid
