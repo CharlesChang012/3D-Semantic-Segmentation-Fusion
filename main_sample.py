@@ -27,8 +27,8 @@ def main():
     # ==============================#
     #             Logger            #
     # ==============================#
-    sys.stdout = Logger(config['train_params']['save_dir'], "test_sample.log")
-    sys.stderr = Logger(config['train_params']['save_dir'], "test_sample.log")
+    sys.stdout = Logger(config['train_params']['checkpoint_path'], "test_sample.log")
+    sys.stderr = Logger(config['train_params']['checkpoint_path'], "test_sample.log")
 
     # ==============================#
     #            Set device         #
@@ -80,8 +80,8 @@ def main():
         criterion=criterion,
         device=device,
     )
- 
-    plot_cloud(test_sample_result['points'][0, :, :3], np.array(test_sample_result['predictions']), save_dir=config['test_params']['checkpoint_path'])
+
+    plot_cloud(config, test_sample_result['points'][0, :, :3], np.array(test_sample_result['predictions']), checkpoint_path=config['test_params']['checkpoint_path'])
 
 
 if __name__ == "__main__":

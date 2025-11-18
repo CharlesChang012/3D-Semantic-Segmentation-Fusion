@@ -25,8 +25,8 @@ def main():
     # ==============================#
     #             Logger            #
     # ==============================#
-    sys.stdout = Logger(config['train_params']['save_dir'], "test.log")
-    sys.stderr = Logger(config['train_params']['save_dir'], "test.log")
+    sys.stdout = Logger(config['train_params']['checkpoint_path'], "test.log")
+    sys.stderr = Logger(config['train_params']['checkpoint_path'], "test.log")
 
     # ==============================#
     #            Set device         #

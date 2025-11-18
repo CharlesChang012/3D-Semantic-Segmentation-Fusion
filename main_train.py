@@ -26,8 +26,8 @@ def main():
     # ==============================#
     #             Logger            #
     # ==============================#
-    sys.stdout = Logger(config['train_params']['save_dir'], "train.log")
-    sys.stderr = Logger(config['train_params']['save_dir'], "train.log")
+    sys.stdout = Logger(config['train_params']['checkpoint_path'], "train.log")
+    sys.stderr = Logger(config['train_params']['checkpoint_path'], "train.log")
 
     # ==============================#
     #            Set device         #
@@ -60,8 +60,8 @@ def main():
     ).to(device)
 
     # Load best model to continue training
-    # best_model_path = os.path.join(config['train_params']['checkpoint_path'], "3DSSF.pth")
-    # model.load_state_dict(torch.load(best_model_path, map_location=device))
+    best_model_path = os.path.join(config['train_params']['checkpoint_path'], "3DSSF.pth")
+    model.load_state_dict(torch.load(best_model_path, map_location=device))
 
     # Initialize Optimizer
     if config['train_params']['optimizer'] == 'AdamW':
@@ -86,7 +86,7 @@ def main():
         optimizer=optimizer,
         criterion=criterion,
         device=device,
-        save_dir=config['train_params']['save_dir'],
+        save_dir=config['train_params']['checkpoint_path'],
         num_epochs=config['train_params']['max_num_epochs'],
         fusion_model_name='3DSSF'
     )
@@ -94,7 +94,7 @@ def main():
     # ==============================#
     #     Plot Training History     #
     # ==============================#
-    plot_training_history(train_his, val_his, save_dir=config['train_params']['save_dir'])
+    plot_training_history(train_his, val_his, save_dir=config['train_params']['checkpoint_path'])
 
 
 if __name__ == "__main__":

@@ -5,6 +5,8 @@ from tqdm import tqdm
 import time
 import os
 import copy
+# Import evaluation metrics
+from utils.evaluation import compute_confusion_matrix, compute_iou, per_class_accuracy, overall_accuracy, precision_recall_f1
 
 def train_model(dataloaders, image_encoder, pcd_encoder, model, optimizer, criterion, device,
                 save_dir=None, num_epochs=15, fusion_model_name='3DSSF'):
@@ -27,6 +29,9 @@ def train_model(dataloaders, image_encoder, pcd_encoder, model, optimizer, crite
             running_loss = 0.0
             running_corrects = 0
             total_points = 0
+
+            all_preds = []
+            all_labels_list = []
 
             dataloader_tqdm = tqdm(dataloaders[phase], desc=f"{phase.capitalize()} Epoch {epoch}", leave=False)
 
@@ -74,6 +79,11 @@ def train_model(dataloaders, image_encoder, pcd_encoder, model, optimizer, crite
                 running_corrects += torch.sum(predictions == gt_label_mask)
                 total_points += gt_label_mask.size(0)
 
+                # Accumulate for full-epoch metrics (VALIDATION ONLY)
+                if phase == 'val':
+                    all_preds.append(predictions.detach().cpu())
+                    all_labels_list.append(gt_label_mask.detach().cpu())
+
                 # Update tqdm bar description with current loss and accuracy
                 dataloader_tqdm.set_postfix({
                     'Loss': running_loss / total_points,
@@ -81,12 +91,31 @@ def train_model(dataloaders, image_encoder, pcd_encoder, model, optimizer, crite
                 })
 
             epoch_acc = running_corrects.double() / total_points
-            if phase == 'val' and epoch_acc > best_acc:
-                best_acc = epoch_acc
-                best_model_wts = copy.deepcopy(model.state_dict())
-                if save_dir:
-                    os.makedirs(save_dir, exist_ok=True)
-                    torch.save(best_model_wts, os.path.join(save_dir, fusion_model_name + '.pth'))
+            if phase == 'val':
+                all_preds = torch.cat(all_preds, dim=0)
+                all_labels_all = torch.cat(all_labels_list, dim=0)
+
+                num_classes = outputs.shape[-1]
+
+                conf_mat = compute_confusion_matrix(all_preds, all_labels_all, num_classes)
+                iou_per_class, miou = compute_iou(conf_mat)
+                acc_per_class, mean_acc = per_class_accuracy(conf_mat)
+                precision, recall, f1 = precision_recall_f1(conf_mat)
+
+                print("\n==== VALIDATION METRICS ====")
+                print(f"Loss: {running_loss/total_points:.4f}")
+                print(f"Overall Acc: {epoch_acc:.4f}, Mean Per-Class Acc: {mean_acc:.4f}")
+                print(f"Per-Class IoU: {iou_per_class:.4f}, Mean IoU: {miou:.4f}")
+                print(f"Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}")
+                print("============================\n")
+
+                if epoch_acc > best_acc:
+                    best_acc = epoch_acc
+                    best_model_wts = copy.deepcopy(model.state_dict())
+                    if save_dir:
+                        os.makedirs(save_dir, exist_ok=True)
+                        torch.save(best_model_wts, os.path.join(save_dir, fusion_model_name + '.pth'))
+
 
             if phase == 'train':
                 tr_acc_history.append(epoch_acc)
