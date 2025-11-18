@@ -51,18 +51,21 @@ class CELSLoss(nn.Module):
 
         # Further filter out ignored labels (noise label 0)
         valid_mask = gt_labels_flat != self.ignore_index
-        pred_probs_flat = F.softmax(pred_scores_flat, dim=-1)
-        pred_probs_flat_valid = pred_probs_flat[valid_mask]
+        pred_scores_flat_valid = pred_scores_flat[valid_mask]
+        pred_probs_flat_valid = F.softmax(pred_scores_flat_valid, dim=-1)
         gt_labels_flat_valid = gt_labels_flat[valid_mask]   # [1-16]
 
         # Cross-Entropy Loss
-        ce_loss = self.ce_loss(pred_scores_flat, gt_labels_flat_valid - 1)  # shift labels to [0, C-1] for CE
+        ce_loss = self.ce_loss(pred_scores_flat_valid, gt_labels_flat_valid - 1)  # shift labels to [0, C-1] for CE
+        print("\nce_loss:", ce_loss.item(), "\n")
 
         # Lovasz Loss on full batch (B, P, C)
         lovasz_loss = lovasz_softmax_flat(pred_probs_flat_valid, gt_labels_flat_valid - 1)  # Lovasz expects labels in [0, C-1]
+        print("lovasz_loss:", lovasz_loss.item(), "\n")
 
         # Calculate predictions
         predictions = torch.argmax(pred_probs_flat_valid, dim=-1) + 1  # shift back to original labels [1-16]
 
         total_loss = ce_loss + lovasz_loss
+
         return total_loss, ce_loss, lovasz_loss, predictions, gt_labels_flat_valid

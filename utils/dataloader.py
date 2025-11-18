@@ -14,8 +14,16 @@ from pyquaternion import Quaternion
 class nuScenes(Dataset):
     def __init__(self, config, imageset='train', num_vote=1):
         if config.get("debug", False):
-            version = 'v1.0-mini'
-            scenes = splits.mini_train
+            ## If mini set is available
+            # version = 'v1.0-mini'
+            # scenes = splits.mini_train
+            ## If mini set is not available
+            if imageset == 'train' or imageset == 'val':
+                version = 'v1.0-trainval'
+                scenes = splits.train[:1] if imageset == 'train' else splits.val[:1]
+            else:
+                version = 'v1.0-test'
+                scenes = splits.test[:1]
         else:
             if imageset == 'train' or imageset == 'val':
                 version = 'v1.0-trainval'

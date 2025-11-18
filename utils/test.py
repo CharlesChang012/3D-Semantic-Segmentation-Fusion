@@ -18,6 +18,7 @@ def test_model(dataloaders, image_encoder, pcd_encoder, model, criterion, device
     total_loss = 0.0
     total_correct = 0
     total_points = 0
+    i = 0
 
     all_preds = []
     all_labels = []
@@ -70,26 +71,21 @@ def test_model(dataloaders, image_encoder, pcd_encoder, model, criterion, device
         # -------------------------
         # Compute Loss & Predictions
         # -------------------------
-        total_loss_batch, ce_loss, lovasz_loss, predictions, gt_label_mask = criterion(outputs, labels, mask=mask)
+        total_loss_batch, ce_loss, lovasz_loss, predictions, gt_labels_valid = criterion(outputs, labels, mask=mask)
 
         # Accumulate stats
         total_loss += total_loss_batch.item()
-
-        # Remove padded points for evaluation
-        valid_pred = predictions[mask]
-        valid_label = labels[mask]
-
-        valid_mask = gt_label_mask != 0     # ignore noise class
-        total_correct += torch.sum(valid_pred[valid_mask] == valid_label[valid_mask])
-        total_points += valid_mask.sum().item()
+        total_correct += torch.sum(predictions == gt_labels_valid)
+        total_points += gt_labels_valid.size(0)
+        i += 1
 
         # Save for confusion matrix
-        all_preds.append(valid_pred.cpu())
-        all_labels.append(valid_label.cpu())
+        all_preds.append(predictions.cpu())
+        all_labels.append(gt_labels_valid.cpu())
 
         # Update tqdm
         dataloader_tqdm.set_postfix({
-            'Loss': total_loss / total_points,
+            'Loss': total_loss / i,
             'Acc': total_correct / total_points
         })
 
@@ -102,7 +98,7 @@ def test_model(dataloaders, image_encoder, pcd_encoder, model, criterion, device
 
     num_classes = outputs.shape[-1]
 
-    evaluation_metrics = evaluate(all_preds, all_labels, num_classes, total_loss, total_correct, total_points)
+    evaluation_metrics = evaluate(all_preds, all_labels, num_classes, total_loss, total_correct, total_points, i)
 
     return evaluation_metrics
 
@@ -172,19 +168,19 @@ def test_sample(dataloaders, image_encoder, pcd_encoder, model, criterion, devic
     # ------------------------------------------------
     # 5. Loss + predictions using mask
     # ------------------------------------------------
-    total_loss, ce_loss, lovasz_loss, preds, labels_masked = criterion(outputs, labels, mask=mask)
+    total_loss, ce_loss, lovasz_loss, predictions, gt_labels_valid = criterion(outputs, labels, mask=mask)
 
     # ------------------------------------------------
     # 6. Prepare arrays for metrics
     # ------------------------------------------------
     # preds and labels_masked are already masked and flattened
-    all_preds = preds.cpu()
-    all_labels = labels_masked.cpu()
+    all_preds = predictions.cpu()
+    all_labels = gt_labels_valid.cpu()
     num_classes = outputs.shape[-1]
-    total_correct = torch.sum(preds == labels_masked)
-    total_points = labels_masked.size(0)
+    total_correct = torch.sum(predictions == gt_labels_valid)
+    total_points = gt_labels_valid.size(0)
 
-    evaluation_metrics = evaluate(all_preds, all_labels, num_classes, total_loss, total_correct, total_points)
+    evaluation_metrics = evaluate(all_preds, all_labels, num_classes, total_loss, total_correct, total_points, 1)
 
     scene_data = {
         "points": lidar_points.cpu().numpy(),

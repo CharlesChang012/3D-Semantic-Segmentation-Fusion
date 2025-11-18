@@ -29,6 +29,7 @@ def train_model(dataloaders, image_encoder, pcd_encoder, model, optimizer, crite
             running_loss = 0.0
             running_corrects = 0
             total_points = 0
+            i = 0
 
             all_preds = []
             all_labels_list = []
@@ -85,12 +86,12 @@ def train_model(dataloaders, image_encoder, pcd_encoder, model, optimizer, crite
                     all_labels_list.append(gt_labels_valid.detach().cpu())
 
                 # Update tqdm bar description with current loss and accuracy
+                i += 1
                 dataloader_tqdm.set_postfix({
-                    'Loss': running_loss / total_points,
+                    'Loss': running_loss / i,
                     'Acc': running_corrects.double() / total_points
                 })
 
-            epoch_acc = running_corrects.double() / total_points
             if phase == 'val':
                 all_preds = torch.cat(all_preds, dim=0)
                 all_labels = torch.cat(all_labels_list, dim=0)
@@ -98,7 +99,8 @@ def train_model(dataloaders, image_encoder, pcd_encoder, model, optimizer, crite
                 num_classes = outputs.shape[-1]
 
                 # Evaluate metrics
-                evaluation_metrics = evaluate(all_preds, all_labels, num_classes, running_loss, running_corrects.double(), total_points)
+                evaluation_metrics = evaluate(all_preds, all_labels, num_classes, running_loss, running_corrects.double(), total_points, i)
+                epoch_acc = evaluation_metrics['overall_acc']
 
                 # Save best model weights
                 if epoch_acc > best_acc:

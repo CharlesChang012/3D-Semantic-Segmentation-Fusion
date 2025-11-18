@@ -2,7 +2,7 @@ import torch
 import time
 import numpy as np
 
-def evaluate(all_preds, all_labels, num_classes, total_loss, total_correct, total_points):
+def evaluate(all_preds, all_labels, num_classes, total_loss, total_correct, total_points, iteration):
 
     # Evaluate metrics
     conf_mat = compute_confusion_matrix(all_preds, all_labels, num_classes)
@@ -10,15 +10,18 @@ def evaluate(all_preds, all_labels, num_classes, total_loss, total_correct, tota
     acc_per_class, mean_acc = per_class_accuracy(conf_mat)
     precision, recall, f1 = precision_recall_f1(conf_mat)
 
-    print("\n==== TEST METRICS ====")
-    print(f"Loss: {total_loss/total_points:.4f}, Overall Acc: {total_correct/total_points:.4f}")
-    print(f"Per-Class Acc: {acc_per_class:.4f}, Mean Per-Class Acc: {mean_acc:.4f}")
-    print(f"Per-Class IoU: {iou_per_class:.4f}, Mean IoU: {miou:.4f}")
-    print(f"Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}")
-    print("============================\n")
+    print("\n====== EVALUATION METRICS ======")
+    print(f"Loss: {total_loss/iteration:.4f}, Overall Acc: {total_correct/total_points:.4f}")
+
+    print(f"Per-Class Acc: {[f'{v:.4f}' for v in acc_per_class.tolist()]}, Mean Per-Class Acc: {mean_acc.item():.4f}")
+    print(f"Per-Class IoU: {[f'{v:.4f}' for v in iou_per_class.tolist()]}, Mean IoU: {miou.item():.4f}")
+
+    print(f"Precision: {precision.item():.4f}, Recall: {recall.item():.4f}, F1: {f1.item():.4f}")
+    print("=================================\n")
+
 
     return {
-        'loss': total_loss / total_points,
+        'loss': total_loss / iteration,
         'overall_acc': total_correct / total_points,
         'mean_iou': miou.item(),
         'mean_per_class_acc': mean_acc.item(),
@@ -27,8 +30,10 @@ def evaluate(all_preds, all_labels, num_classes, total_loss, total_correct, tota
         'f1': f1.item()
     }
 
-    
+
 def compute_confusion_matrix(preds, labels, num_classes):
+    preds = preds - 1
+    labels = labels - 1
     conf_matrix = torch.bincount(
         num_classes * labels + preds,
         minlength=num_classes ** 2
