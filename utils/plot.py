@@ -42,7 +42,7 @@ def plot_cloud(config, points, labels, max_num=100000, save_dir=None):
     Plot point cloud in a normal Python environment with a
     categorical colorbar showing class-label mapping.
     """
-    CLASS_NAMES = load_class_names(config['dataset_params']['label_mapping'], use_16_classes=True)
+    class_names = load_class_names(config['dataset_params']['label_mapping'], use_16_classes=True)
 
     # Random sampling
     inds = np.random.permutation(points.shape[0])[:max_num]
@@ -60,7 +60,7 @@ def plot_cloud(config, points, labels, max_num=100000, save_dir=None):
             opacity=0.8,
             color=COLOR_MAP[labels].tolist(),
         ),
-        hovertext=[CLASS_NAMES[int(c)] for c in labels],
+        hovertext=[class_names[int(c)] for c in labels],
         hoverinfo="text"
     )
 
@@ -69,14 +69,14 @@ def plot_cloud(config, points, labels, max_num=100000, save_dir=None):
         x=[None], y=[None],
         mode="markers",
         marker=dict(
-            colorscale=[[i / (len(CLASS_NAMES)-1), COLOR_MAP[i]] for i in CLASS_NAMES],
+            colorscale=[[i / (len(class_names)-1), COLOR_MAP[i]] for i in class_names],
             showscale=True,
             cmin=0,
-            cmax=len(CLASS_NAMES)-1,
+            cmax=len(class_names)-1,
             colorbar=dict(
                 title="Classes",
-                tickvals=list(CLASS_NAMES.keys()),
-                ticktext=[CLASS_NAMES[k] for k in CLASS_NAMES],
+                tickvals=list(class_names.keys()),
+                ticktext=[class_names[k] for k in class_names],
                 len=1.0
             ),
             color=[0]  # dummy value
@@ -97,3 +97,29 @@ def plot_cloud(config, points, labels, max_num=100000, save_dir=None):
     # Save as standalone HTML
     save_path = os.path.join(save_dir, "segmentation_result.html")
     plotly.offline.plot(fig, filename=save_path, auto_open=True)
+
+
+def plot_iou_per_class(config, iou_per_class):
+    """
+    Plots a histogram/bar chart of IoU per class.
+    
+    Args:
+        iou_per_class (Tensor or list): IoU value for each class.
+    """
+    class_names = load_class_names(config['dataset_params']['label_mapping'], use_16_classes=True)
+    iou_values = iou_per_class.cpu().numpy() if hasattr(iou_per_class, "cpu") else iou_per_class
+    num_classes = len(iou_values)
+
+    if class_names is None:
+        x_labels = list(range(num_classes))
+    else:
+        x_labels = class_names
+
+    plt.figure(figsize=(12, 5))
+    plt.bar(x_labels, iou_values)
+    plt.xlabel("Class")
+    plt.ylabel("IoU")
+    plt.title("Per-Class IoU")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.show()
