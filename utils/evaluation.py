@@ -2,13 +2,38 @@ import torch
 import time
 import numpy as np
 
+def evaluate(all_preds, all_labels, num_classes, total_loss, total_correct, total_points):
+
+    # Evaluate metrics
+    conf_mat = compute_confusion_matrix(all_preds, all_labels, num_classes)
+    iou_per_class, miou = compute_iou(conf_mat)
+    acc_per_class, mean_acc = per_class_accuracy(conf_mat)
+    precision, recall, f1 = precision_recall_f1(conf_mat)
+
+    print("\n==== TEST METRICS ====")
+    print(f"Loss: {total_loss/total_points:.4f}, Overall Acc: {total_correct/total_points:.4f}")
+    print(f"Per-Class Acc: {acc_per_class:.4f}, Mean Per-Class Acc: {mean_acc:.4f}")
+    print(f"Per-Class IoU: {iou_per_class:.4f}, Mean IoU: {miou:.4f}")
+    print(f"Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}")
+    print("============================\n")
+
+    return {
+        'loss': total_loss / total_points,
+        'overall_acc': total_correct / total_points,
+        'mean_iou': miou.item(),
+        'mean_per_class_acc': mean_acc.item(),
+        'precision': precision.item(),
+        'recall': recall.item(),
+        'f1': f1.item()
+    }
+
+    
 def compute_confusion_matrix(preds, labels, num_classes):
-    mask = (labels >= 0) & (labels < num_classes)
-    hist = torch.bincount(
-        num_classes * labels[mask] + preds[mask],
+    conf_matrix = torch.bincount(
+        num_classes * labels + preds,
         minlength=num_classes ** 2
     ).reshape(num_classes, num_classes)
-    return hist
+    return conf_matrix
 
 
 def compute_iou(conf_matrix):

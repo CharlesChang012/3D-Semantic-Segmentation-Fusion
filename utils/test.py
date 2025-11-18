@@ -6,7 +6,7 @@ import time
 import os
 import copy
 # Import evaluation metrics
-from utils.evaluation import compute_confusion_matrix, compute_iou, per_class_accuracy, overall_accuracy, precision_recall_f1
+from utils.evaluation import evaluate
 
 @torch.no_grad()
 def test_model(dataloaders, image_encoder, pcd_encoder, model, criterion, device):
@@ -79,8 +79,9 @@ def test_model(dataloaders, image_encoder, pcd_encoder, model, criterion, device
         valid_pred = predictions[mask]
         valid_label = labels[mask]
 
-        total_correct += (valid_pred == valid_label).sum().item()
-        total_points += valid_label.numel()
+        valid_mask = gt_label_mask != 0     # ignore noise class
+        total_correct += torch.sum(valid_pred[valid_mask] == valid_label[valid_mask])
+        total_points += valid_mask.sum().item()
 
         # Save for confusion matrix
         all_preds.append(valid_pred.cpu())
@@ -101,25 +102,10 @@ def test_model(dataloaders, image_encoder, pcd_encoder, model, criterion, device
 
     num_classes = outputs.shape[-1]
 
-    conf_mat = compute_confusion_matrix(all_preds, all_labels, num_classes)
-    iou_per_class, miou = compute_iou(conf_mat)
-    acc_per_class, mean_acc = per_class_accuracy(conf_mat)
-    precision, recall, f1 = precision_recall_f1(conf_mat)
+    evaluation_metrics = evaluate(all_preds, all_labels, num_classes, total_loss, total_correct, total_points)
 
-    print("\n✅ Test Results")
-    print(f"Loss: {total_loss/total_points:.4f}, Overall Acc: {total_correct/total_points:.4f}")
-    print(f"Mean IoU: {miou:.4f}, Mean Per-Class Acc: {mean_acc:.4f}")
-    print(f"Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}")
+    return evaluation_metrics
 
-    return {
-        'loss': total_loss / total_points,
-        'overall_acc': total_correct / total_points,
-        'mean_iou': miou.item(),
-        'mean_per_class_acc': mean_acc.item(),
-        'precision': precision.item(),
-        'recall': recall.item(),
-        'f1': f1.item()
-    }
 
 @torch.no_grad()
 def test_sample(dataloaders, image_encoder, pcd_encoder, model, criterion, device):
@@ -194,38 +180,18 @@ def test_sample(dataloaders, image_encoder, pcd_encoder, model, criterion, devic
     # preds and labels_masked are already masked and flattened
     all_preds = preds.cpu()
     all_labels = labels_masked.cpu()
-
-    # ------------------------------------------------
-    # 7. Compute confusion matrix & metrics
-    # ------------------------------------------------
     num_classes = outputs.shape[-1]
-    conf_mat = compute_confusion_matrix(all_preds, all_labels, num_classes)
-    iou_per_class, miou = compute_iou(conf_mat)
-    acc_per_class, mean_acc = per_class_accuracy(conf_mat)
-    precision, recall, f1 = precision_recall_f1(conf_mat)
+    total_correct = torch.sum(preds == labels_masked)
+    total_points = labels_masked.size(0)
 
-    # ------------------------------------------------
-    # 8. Print results
-    # ------------------------------------------------
-    print("\n✅ Test Results (Single Batch)")
-    print(f"Loss: {total_loss.item():.4f}")
-    print(f"Overall Acc: {(all_preds == all_labels).float().mean():.4f}")
-    print(f"Mean IoU: {miou:.4f}")
-    print(f"Mean Per-Class Acc: {mean_acc:.4f}")
-    print(f"Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}")
+    evaluation_metrics = evaluate(all_preds, all_labels, num_classes, total_loss, total_correct, total_points)
 
-    # ------------------------------------------------
-    # 9. Return dictionary
-    # ------------------------------------------------
-    return {
-        "loss": total_loss.item(),
-        "overall_acc": (all_preds == all_labels).float().mean().item(),
-        "mean_iou": miou.item(),
-        "mean_per_class_acc": mean_acc.item(),
-        "precision": precision.item(),
-        "recall": recall.item(),
-        "f1": f1.item(),
+    scene_data = {
         "points": lidar_points.cpu().numpy(),
         "predictions": all_preds,
         "labels": all_labels,
     }
+
+    evaluation_results = {**evaluation_metrics, **scene_data}
+
+    return evaluation_results
