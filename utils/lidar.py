@@ -96,9 +96,12 @@ class LiDARFeatureEncoder(nn.Module):
 
         # Step 3: Map intensity via nearest neighbor
         if pts.shape[1] == 4:
-            nbrs = NearestNeighbors(n_neighbors=1, algorithm="auto").fit(pts[:, :3])
+            # use k=5 knn
+            nbrs = NearestNeighbors(n_neighbors=5, algorithm="auto").fit(pts[:, :3])
             _, idx = nbrs.kneighbors(down_points)
-            intensities = pts[idx.squeeze(), 3].reshape(-1, 1)
+            # weighted average intensity from 5 nearest neighbors
+            weights = np.array([0.4, 0.3, 0.2, 0.05, 0.05]).reshape(1, 5)
+            intensities = (pts[idx.squeeze(), 3] * weights).sum(axis=1).reshape(-1, 1)
             voxel_raw = np.hstack([down_points, intensities])
         else:
             voxel_raw = down_points
