@@ -57,11 +57,9 @@ class CELSLoss(nn.Module):
 
         # Cross-Entropy Loss
         ce_loss = self.ce_loss(pred_scores_flat_valid, gt_labels_flat_valid - 1)  # shift labels to [0, C-1] for CE
-        print("\nce_loss:", ce_loss.item(), "\n")
 
         # Lovasz Loss on full batch (B, P, C)
         lovasz_loss = lovasz_softmax_flat(pred_probs_flat_valid, gt_labels_flat_valid - 1)  # Lovasz expects labels in [0, C-1]
-        print("lovasz_loss:", lovasz_loss.item(), "\n")
 
         # Calculate predictions
         predictions = torch.argmax(pred_probs_flat_valid, dim=-1) + 1  # shift back to original labels [1-16]

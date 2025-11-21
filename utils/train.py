@@ -5,17 +5,32 @@ from tqdm import tqdm
 import time
 import os
 import copy
+# Visualization
+import wandb
 # Import evaluation metrics
 from utils.evaluation import evaluate
 
 def train_model(dataloaders, image_encoder, pcd_encoder, model, optimizer, criterion, device,
-                save_dir=None, num_epochs=15, fusion_model_name='3DSSF'):
+                save_dir=None, num_epochs=10, fusion_model_name='3DSSF', config=None):
+
+    # Start a new wandb run to track this script.
+    wandbLogger = wandb.init(
+        # Set the wandb entity where your project will be logged (generally your team name).
+        entity="pohsun-university-of-michigan",
+        # Set the wandb project where this run will be logged.
+        project="3DSSF",
+        # Track hyperparameters and run metadata.
+        config=config
+    )
 
     val_acc_history = []
     tr_acc_history = []
 
     best_model_wts = copy.deepcopy(model.state_dict())
     best_acc = 0.0
+
+    # GLOBAL STEP COUNTER
+    global_step = 0
 
     for epoch in range(num_epochs):
         print(f'Epoch {epoch}/{num_epochs - 1}\n' + '-'*20)
@@ -29,14 +44,14 @@ def train_model(dataloaders, image_encoder, pcd_encoder, model, optimizer, crite
             running_loss = 0.0
             running_corrects = 0
             total_points = 0
-            i = 0
 
             all_preds = []
             all_labels_list = []
 
             dataloader_tqdm = tqdm(dataloaders[phase], desc=f"{phase.capitalize()} Epoch {epoch}", leave=False)
 
-            for images, image_sizes, lidar_points, labels, mask, cam_intrinsics, cam2lidar_extrinsics in dataloader_tqdm:
+            for i, batch in enumerate(dataloader_tqdm):
+                images, image_sizes, lidar_points, labels, mask, cam_intrinsics, cam2lidar_extrinsics = batch
                 # Move to device
                 images = images.to(device)              # (B, 6, C, H, W)
                 image_sizes = image_sizes.to(device)    # (B, 2)
@@ -86,12 +101,22 @@ def train_model(dataloaders, image_encoder, pcd_encoder, model, optimizer, crite
                     all_labels_list.append(gt_labels_valid.detach().cpu())
 
                 # Update tqdm bar description with current loss and accuracy
-                i += 1
                 dataloader_tqdm.set_postfix({
-                    'Loss': running_loss / i,
+                    'Loss': running_loss / (i + 1),
                     'Acc': running_corrects.double() / total_points
                 })
 
+                # Log to wandb
+                if phase == 'train':
+                    wandb.log({
+                        "train/loss": float(running_loss) / float(i + 1),
+                        "train/acc": float(running_corrects) / float(total_points),
+                        "step": global_step
+                    })
+                    global_step += 1
+
+            epoch_acc = running_corrects.double() / total_points
+            
             if phase == 'val':
                 all_preds = torch.cat(all_preds, dim=0)
                 all_labels = torch.cat(all_labels_list, dim=0)
@@ -99,7 +124,7 @@ def train_model(dataloaders, image_encoder, pcd_encoder, model, optimizer, crite
                 num_classes = outputs.shape[-1]
 
                 # Evaluate metrics
-                evaluation_metrics = evaluate(all_preds, all_labels, num_classes, running_loss, running_corrects.double(), total_points, i)
+                evaluation_metrics = evaluate(all_preds, all_labels, num_classes, running_loss, running_corrects.double(), total_points, i + 1)
                 epoch_acc = evaluation_metrics['overall_acc']
 
                 # Save best model weights
@@ -109,6 +134,18 @@ def train_model(dataloaders, image_encoder, pcd_encoder, model, optimizer, crite
                     if save_dir:
                         os.makedirs(save_dir, exist_ok=True)
                         torch.save(best_model_wts, os.path.join(save_dir, fusion_model_name + '.pth'))
+
+                # Log to wandb
+                wandb.log({
+                    "val/loss": evaluation_metrics["loss"],
+                    "val/acc": evaluation_metrics["overall_acc"],
+                    "val/mean_IoU": evaluation_metrics["mean_iou"],
+                    "val/mean_per_class_acc": evaluation_metrics["mean_per_class_acc"],
+                    "val/precision": evaluation_metrics["precision"],
+                    "val/recall": evaluation_metrics["recall"],
+                    "val/f1": evaluation_metrics["f1"],
+                    "epoch": epoch,
+                })
 
             # Record accuracy history
             if phase == 'train':
