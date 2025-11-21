@@ -119,7 +119,6 @@ class nuScenes(Dataset):
             cam_intrinsics.append(cam_intrinsic)
 
         # Use the first camera for calibration (or extend for all cameras if needed)
-        # cam_path, boxes_front_cam, cam_intrinsic = self.nusc.get_sample_data(cam_sample_tokens[0])
         pointsensor = self.nusc.get('sample_data', lidar_sample_token)
         cs_record_lidar = self.nusc.get('calibrated_sensor', pointsensor['calibrated_sensor_token'])
         pose_record_lidar = self.nusc.get('ego_pose', pointsensor['ego_pose_token'])
@@ -131,17 +130,12 @@ class nuScenes(Dataset):
         T_lidar_ego = np.eye(4)
         T_lidar_ego[:3, :3] = R_l
         T_lidar_ego[:3, 3] = t_l
-        T_lidar_ego_inv = np.linalg.inv(T_lidar_ego)
 
-        cam2lidar_list = []
-        # cs_record_cam = []
-        # pose_record_cam = []
+        lidar2cam_list = []
         for cam_token in cam_sample_tokens:
             cam = self.nusc.get('sample_data', cam_token)
             cs_record = self.nusc.get('calibrated_sensor', cam['calibrated_sensor_token'])
             pose_record = self.nusc.get('ego_pose', cam['ego_pose_token'])
-            # cs_record_cam.append(cs_record)
-            # pose_record_cam.append(pose_record)
             
             # Camera 2 ego
             R_c = Quaternion(cs_record['rotation']).rotation_matrix
@@ -149,21 +143,12 @@ class nuScenes(Dataset):
             T_cam_ego = np.eye(4)
             T_cam_ego[:3, :3] = R_c
             T_cam_ego[:3, 3] = t_c
-            T_cam_lidar = T_lidar_ego_inv @ T_cam_ego        # Camera 2 LiDAR = inv(T_lidar_ego) @ T_cam_ego
-            cam2lidar_list.append(T_cam_lidar)
+            T_cam_ego_inv = np.linalg.inv(T_cam_ego)
 
-        # calib_info = {
-        #     # "lidar2ego_translation": cs_record_lidar['translation'],
-        #     # "lidar2ego_rotation": cs_record_lidar['rotation'],
-        #     # "ego2global_translation_lidar": pose_record_lidar['translation'],
-        #     # "ego2global_rotation_lidar": pose_record_lidar['rotation'],
-        #     # "ego2global_translation_cam": [pose['translation'] for pose in pose_record_cam],
-        #     # "ego2global_rotation_cam": [pose['rotation'] for pose in pose_record_cam],
-        #     # "cam2ego_translation": [cs['translation'] for cs in cs_record_cam],
-        #     # "cam2ego_rotation": [cs['rotation'] for cs in cs_record_cam],
-        #     "cam_intrinsic": cam_intrinsics,
-        #     "cam2lidar_extrinsic": cam2lidar_list,
-        # }
+            # LiDAR 2 Camera
+            T_lidar_cam = T_cam_ego_inv @ T_lidar_ego
+
+            lidar2cam_list.append(T_lidar_cam)
 
         data_dict = {
             'images': images,               # list of 6 PIL images
@@ -171,7 +156,7 @@ class nuScenes(Dataset):
             'labels': sem_label.astype(np.uint8),
             'num_points': len(pointcloud),
             'cam_intrinsic': np.array(cam_intrinsics),
-            'cam2lidar_extrinsic': np.array(cam2lidar_list)
+            'lidar2cam_extrinsics': np.array(lidar2cam_list)
         }
 
         return data_dict
@@ -236,7 +221,7 @@ def fusion_collate_fn(batch):
     lidar_list = [torch.from_numpy(sample['lidar_points']).float() for sample in batch]  # (B, P, 4)
     labels_list = [torch.from_numpy(sample['labels']).long().squeeze() for sample in batch]  # (B, P)
     cam_intrinsics = [torch.from_numpy(sample['cam_intrinsic']).float().squeeze() for sample in batch]    # (B,)
-    cam2lidar_extrinsics = [torch.from_numpy(sample['cam2lidar_extrinsic']).float().squeeze() for sample in batch]  # (B,)
+    lidar2cam_extrinsics = [torch.from_numpy(sample['lidar2cam_extrinsics']).float().squeeze() for sample in batch]  # (B,)
 
     max_P = max([l.shape[0] for l in lidar_list])
     pcd_feat_dim = lidar_list[0].shape[1]       # 4
@@ -252,7 +237,7 @@ def fusion_collate_fn(batch):
         valid_mask = (labels_list[i] != 0)   # ignore noise class 0
         mask[i, :P] = valid_mask
     
-    return images, image_sizes, lidar_points_padded, labels_padded, mask, cam_intrinsics, cam2lidar_extrinsics
+    return images, image_sizes, lidar_points_padded, labels_padded, mask, cam_intrinsics, lidar2cam_extrinsics
 
 def calculate_class_weights(dataloaders, device, num_classes, print_every=100):
     # class counts directly on GPU
