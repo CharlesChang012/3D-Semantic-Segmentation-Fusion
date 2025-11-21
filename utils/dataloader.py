@@ -20,10 +20,10 @@ class nuScenes(Dataset):
             ## If mini set is not available
             if imageset == 'train' or imageset == 'val':
                 version = 'v1.0-trainval'
-                scenes = splits.train[:1] if imageset == 'train' else splits.val[:1]
+                scenes = splits.train[:3] if imageset == 'train' else splits.val[:3]
             else:
                 version = 'v1.0-test'
-                scenes = splits.test[:1]
+                scenes = splits.test[:3]
         else:
             if imageset == 'train' or imageset == 'val':
                 version = 'v1.0-trainval'
