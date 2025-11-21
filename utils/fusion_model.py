@@ -11,14 +11,14 @@ import os
 # -------------------------
 # 1. Projector
 # -------------------------
-def multi_camera_projector(lidar_points, cam_intrinsics, cam2lidar_extrinsics, image_sizes):
+def multi_camera_projector(lidar_points, cam_intrinsics, lidar2cam_extrinsics, image_sizes):
     """
     Project batched LiDAR points into multiple camera views.
 
     Args:
         lidar_points: (B, V, 3) tensor of LiDAR coordinates in the LiDAR frame.
         cam_intrinsics: iterable of length B; each item has shape (N_cam, 3, 3).
-        cam2lidar_extrinsics: iterable of length B; each item has shape (N_cam, 4, 4).
+        lidar2cam_extrinsics: iterable of length B; each item has shape (N_cam, 4, 4).
         image_sizes: iterable of length B with tuples (H, W) for each view (assumes same size across cameras per sample).
 
     Returns:
@@ -46,7 +46,7 @@ def multi_camera_projector(lidar_points, cam_intrinsics, cam2lidar_extrinsics, i
         return stacked
 
     K = _to_tensor(cam_intrinsics, (n_cam, 3, 3))  # (B, N_cam, 3, 3)
-    Rt = _to_tensor(cam2lidar_extrinsics, (n_cam, 4, 4))  # (B, N_cam, 4, 4)
+    Rt = _to_tensor(lidar2cam_extrinsics, (n_cam, 4, 4))  # (B, N_cam, 4, 4)
 
     img_sizes_tensor = torch.as_tensor(image_sizes, dtype=dtype, device=device)  # (B, 2) in (H, W)
     if img_sizes_tensor.shape != (B, 2):
@@ -66,7 +66,7 @@ def multi_camera_projector(lidar_points, cam_intrinsics, cam2lidar_extrinsics, i
         Rt_cam = Rt_cam.float()
 
         cam_pts = torch.matmul(Rt_cam.unsqueeze(1), pts_h.unsqueeze(-1)).squeeze(-1)    # (B, 1, 4, 4) @ (B, V, 4, 1) -> (B, V, 4, 1).squeeze(-1) -> (B, V, 4)
-        xyz = cam_pts[:, :, :3]
+        xyz = cam_pts[:, :, :3]     # (B, V, 3)
         z = xyz[:, :, 2]
 
         pix = torch.matmul(K_cam, xyz.transpose(1, 2)).transpose(1, 2)
@@ -84,12 +84,6 @@ def multi_camera_projector(lidar_points, cam_intrinsics, cam2lidar_extrinsics, i
         depth[:, cam_idx] = torch.where(valid, z, torch.full_like(z, -1.0))  # (B, V)
 
     return pixel_coords, depth, valid_mask
-
-    # Stack per-camera to (B, n_cam, V, 2) and (B, n_cam, V)
-    proj_uv_all = torch.stack(proj_uv_all, dim=1)
-    depth_all = torch.stack(depth_all, dim=1)
-
-    return proj_uv_all, depth_all
 
 
 def scale_pixel_coords(pixel_coords: torch.Tensor,
@@ -155,13 +149,13 @@ class FeatureFusionModel(nn.Module):
             nn.Linear(64, output_dim),
         )
 
-    def forward(self, patch_tokens, voxel_features, voxel_coords, image_sizes, cam_intrinsics, cam2lidar_extrinsics):
-        B, V, _ = voxel_features.shape
-        _, num_cams, M, dim = patch_tokens.shape
+    def forward(self, patch_tokens, voxel_features, voxel_coords, image_sizes, cam_intrinsics, lidar2cam_extrinsics):
+        B, V, _ = voxel_features.shape                  # (B, V, 64)
+        _, num_cams, M, dim = patch_tokens.shape        # (B, 6, M, 384)
 
         # 1. Project 3D → 2D
         pixel_coords, _, valid_mask = multi_camera_projector(
-            voxel_coords, cam_intrinsics, cam2lidar_extrinsics, image_sizes
+            voxel_coords, cam_intrinsics, lidar2cam_extrinsics, image_sizes
         )
 
         origin_sizes = torch.as_tensor(image_sizes, dtype=pixel_coords.dtype, device=self.device)
@@ -179,26 +173,25 @@ class FeatureFusionModel(nn.Module):
         patch_xy[..., 1] = patch_xy[..., 1].clamp(0, grid_size - 1)
 
         point_patch_tokens = []
-        valid_mask = valid_mask[:, :num_cams]  # ensure mask aligns with available views
 
         for cam in range(num_cams):
-            tokens = patch_tokens[:, cam].to(self.device)  # (B, M, dim)
-            idx_uv = patch_xy[:, cam].to(self.device)  # (B, V, 2)
+            tokens = patch_tokens[:, cam].to(self.device)               # (B, M, dim)
+            idx_uv = patch_xy[:, cam].to(self.device)                   # (B, V, 2)
 
             flat_idx = (idx_uv[..., 1] * grid_size + idx_uv[..., 0]).clamp(0, total_patches - 1)
-            gather_idx = flat_idx.unsqueeze(-1).expand(-1, -1, dim)
-            gathered = torch.gather(tokens, dim=1, index=gather_idx) # (B, V, dim)
+            gather_idx = flat_idx.unsqueeze(-1).expand(-1, -1, dim)     # (B, V, dim)
+            gathered = torch.gather(tokens, dim=1, index=gather_idx)    # (B, V, dim)
             point_patch_tokens.append(gathered)
 
-        point_patch_tokens = torch.stack(point_patch_tokens, dim=1)  # (B, num_cams, V, dim)
+        point_patch_tokens = torch.stack(point_patch_tokens, dim=1)     # (B, num_cams, V, dim)
 
-        mask = valid_mask[:, :num_cams].unsqueeze(-1)
+        mask = valid_mask.unsqueeze(-1)                                 # (B, num_cams, V, 1)
         mask = mask.to(point_patch_tokens.dtype).to(self.device)
 
         masked_tokens = point_patch_tokens * mask
         valid_counts = mask.sum(dim=1).clamp(min=1.0)
         # Average pooling over valid camera views
-        fused_img_feat = masked_tokens.sum(dim=1) / valid_counts  # (B, V, dim)
+        fused_img_feat = masked_tokens.sum(dim=1) / valid_counts        # (B, V, dim)
    
         fused = torch.cat([voxel_features, fused_img_feat], dim=-1)
         voxel_scores = self.mlp(fused)  # (B, V, C)
