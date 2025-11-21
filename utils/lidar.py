@@ -46,8 +46,8 @@ class LiDARFeatureEncoder(nn.Module):
             voxel_raw, voxel_coords = self.voxelize_open3d(self.lidar_points_raw[i])
 
             voxel_input = {
-                "coord": voxel_raw[:, :3],
-                "feat": voxel_raw,
+                "coord": voxel_coords,          # voxel xyz
+                "feat": voxel_raw,              # raw x,y,z,(intensity)
                 "grid_size": torch.tensor(self.voxel_size, device=self.lidar_points_raw.device),
                 "batch": torch.zeros(voxel_raw.shape[0], dtype=torch.long, device=self.lidar_points_raw.device)
             }
