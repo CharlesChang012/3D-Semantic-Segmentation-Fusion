@@ -7,12 +7,12 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --mem-per-cpu=4000m
-#SBATCH --time=01:00:00
-#SBATCH --account=engin1
-#SBATCH --partition=gpu,gpu_mig40,spgpu
+#SBATCH --time=08:00:00
+#SBATCH --account=eecs442f25_class
+#SBATCH --partition=gpu_mig40,spgpu
 #SBATCH --gpus=1
-#SBATCH --output=./tmp.log
+#SBATCH --mem=64G
+#SBATCH --output=./log/train.log
 
 echo "Running on host: $(hostname)"
 echo "Job ID: $SLURM_JOB_ID"
@@ -22,8 +22,12 @@ echo "Directory is: $(pwd)"
 
 # Activate your environment
 source ~/.bashrc
-conda activate EECS442
+conda activate 3DSSF
 
-python src/main.py > tmp.txt
+PARAMS=$(sed -n "$((SLURM_ARRAY_TASK_ID+1))p" scheduleParams.txt)
+
+echo "Running params: $PARAMS"
+
+python main_train.py $PARAMS > ./log/train.txt
 
 echo "Job finished with exit code $? at: $(date)"

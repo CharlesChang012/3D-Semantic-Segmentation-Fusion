@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import yaml
 import sys
+import argparse
 # Import utilities
 from utils.camera import ImageFeatureEncoder
 from utils.lidar import LiDARFeatureEncoder
@@ -16,23 +17,37 @@ from utils.logger import Logger
 
 def main():
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="config/nuscenes.yaml",
+        help="Path to config YAML file"
+    )
+    args = parser.parse_args()
+
     # ==============================#
     #         Configurations        #
     # ==============================#
     # Load configuration file
-    with open("config/nuscenes.yaml", "r") as f:
+    with open(args.config, "r") as f:
         config = yaml.safe_load(f)
+    print(f"Loaded config from: {args.config}")
+
+    if config.get("debug", False):
+        print("Start training in DEBUG mode")
+    else:
+        print("Start training in FULL DATASET mode")
 
     # ==============================#
     #             Logger            #
     # ==============================#
-    sys.stdout = Logger(config['train_params']['checkpoint_path'], "train.log")
-    sys.stderr = Logger(config['train_params']['checkpoint_path'], "train.log")
+    # sys.stdout = Logger(config['train_params']['checkpoint_path'], "train.log")
+    # sys.stderr = Logger(config['train_params']['checkpoint_path'], "train.log")
 
     # ==============================#
     #            Set device         #
     # ==============================#
-    # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"🚀 Using device: {device}")
 
@@ -54,14 +69,12 @@ def main():
         pcd_encoder=pcd_encoder,
         point_feat_dim=64,
         patch_tok_dim=384,
-        mlp_hidden_dim=256,
         output_dim=config['train_params']['mlp_class'],
         device=device
     ).to(device)
 
     # Load best model to continue training
-    # best_model_path = os.path.join(config['train_params']['checkpoint_path'], "3DSSF.pth")
-    # model.load_state_dict(torch.load(best_model_path, map_location=device))
+    # model.load_state_dict(torch.load(config['train_params']['best_model_path'], map_location=device))
 
     # Initialize Optimizer
     if config['train_params']['optimizer'] == 'AdamW':
@@ -88,7 +101,8 @@ def main():
         device=device,
         save_dir=config['train_params']['checkpoint_path'],
         num_epochs=config['train_params']['max_num_epochs'],
-        fusion_model_name='3DSSF'
+        fusion_model_name='3DSSF',
+        config=config
     )
 
     # ==============================#

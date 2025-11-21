@@ -137,8 +137,7 @@ def scale_pixel_coords(pixel_coords: torch.Tensor,
 # 2. Fusion Model
 # -------------------------
 class FeatureFusionModel(nn.Module):
-    def __init__(self, image_encoder=None, pcd_encoder=None, point_feat_dim=64, patch_tok_dim=384, mlp_hidden_dim=256,
-                 output_dim=16, device="cuda"):
+    def __init__(self, image_encoder=None, pcd_encoder=None, point_feat_dim=64, patch_tok_dim=384, output_dim=16, device="cuda"):
         super().__init__()
 
         self.device = device
@@ -149,9 +148,11 @@ class FeatureFusionModel(nn.Module):
 
         # MLP
         self.mlp = nn.Sequential(
-            nn.Linear(point_feat_dim + patch_tok_dim, mlp_hidden_dim),
+            nn.Linear(point_feat_dim + patch_tok_dim, 256),
             nn.ReLU(),
-            nn.Linear(mlp_hidden_dim, output_dim)
+            nn.Linear(256, 64),
+            nn.ReLU(),
+            nn.Linear(64, output_dim),
         )
 
     def forward(self, patch_tokens, voxel_features, voxel_coords, image_sizes, cam_intrinsics, cam2lidar_extrinsics):
@@ -196,6 +197,7 @@ class FeatureFusionModel(nn.Module):
 
         masked_tokens = point_patch_tokens * mask
         valid_counts = mask.sum(dim=1).clamp(min=1.0)
+        # Average pooling over valid camera views
         fused_img_feat = masked_tokens.sum(dim=1) / valid_counts  # (B, V, dim)
    
         fused = torch.cat([voxel_features, fused_img_feat], dim=-1)

@@ -55,7 +55,6 @@ def main():
         pcd_encoder=pcd_encoder,
         point_feat_dim=64,
         patch_tok_dim=384,
-        mlp_hidden_dim=256,
         output_dim=config['train_params']['mlp_class'],
         device=device
     ).to(device)

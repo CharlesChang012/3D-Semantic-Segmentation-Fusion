@@ -48,7 +48,7 @@ train_params:
   best_model_path: "./checkpoints/nuscenes/3DSSF_dinov3/best/3DSSF.pth"
 
   # Directory to save checkpoints and logs
-  checkpoint_path: "./checkpoints/nuscenes/testOriginal/"
+  checkpoint_path: "./checkpoints/nuscenes/testConfig1/"
 
   # Feature encoder
   image_encoder: 'dinov3' # [dinov2, dinov3]
@@ -56,7 +56,7 @@ train_params:
   # Model params
   mlp_class: 16
   max_num_epochs: 10
-  learning_rate: 0.002
+  learning_rate: 0.005
   optimizer: AdamW # [SGD, Adam, AdamW]
   lr_scheduler: CosineAnnealingLR  # [StepLR, ReduceLROnPlateau, CosineAnnealingLR, CosineAnnealingWarmRestarts]
   momentum: 0.9
@@ -72,4 +72,4 @@ train_params:
 test_params:
 
   # Directory to load model weights
-  checkpoint_path: "./checkpoints/nuscenes/testOriginal/"
+  checkpoint_path: "./checkpoints/nuscenes/testConfig1/"

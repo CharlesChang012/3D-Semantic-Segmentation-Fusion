@@ -1,0 +1,3 @@
+--config ./config/nuscenes.yaml
+--config ./config/nuscenesTestConfig1.yaml
+--config ./config/nuscenesTestConfig2.yaml
