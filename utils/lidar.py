@@ -46,8 +46,8 @@ class LiDARFeatureEncoder(nn.Module):
             voxel_raw, voxel_coords = self.voxelize_open3d(self.lidar_points_raw[i])
 
             voxel_input = {
-                "coord": voxel_coords,          # voxel xyz
-                "feat": voxel_raw,              # raw x,y,z,(intensity)
+                "coord": voxel_raw[:, :3],          # original coord of pcd, xyz
+                "feat": voxel_raw,                  # raw x,y,z,(intensity)
                 "grid_size": torch.tensor(self.voxel_size, device=self.lidar_points_raw.device),
                 "batch": torch.zeros(voxel_raw.shape[0], dtype=torch.long, device=self.lidar_points_raw.device)
             }
@@ -84,7 +84,7 @@ class LiDARFeatureEncoder(nn.Module):
         """
         Convert raw LiDAR point cloud into voxelized representation.
         """
-        pts = lidar_points.detach().cpu().numpy()
+        pts = lidar_points.detach().cpu().numpy()       # (P, 4)
 
         # Step 1: Create Open3D point cloud
         pcd = o3d.geometry.PointCloud()
@@ -174,15 +174,21 @@ class LiDARFeatureEncoder(nn.Module):
 
 
 if __name__ == "__main__":
+
+    import yaml
+    with open("config/nuscenes.yaml", "r") as f:
+        config = yaml.safe_load(f)
+
     # Simulated LiDAR cloud
-    lidar_pcd = torch.randn(120000, 4).cuda()  # (P, 4)
+    lidar_pcd = torch.randn(12, 120000, 4).cuda()  # (B, P, 4)
 
     # Instantiate encoder
-    pcd_encoder = LiDARFeatureEncoder(voxel_size=0.1).cuda()
+    pcd_encoder = LiDARFeatureEncoder(config).to(torch.device("cuda"))
 
     # Forward
-    voxel_features, voxel_raw, voxel_coords = pcd_encoder(lidar_pcd)
+    voxel_features, voxel_raw, voxel_coords, voxel_mask = pcd_encoder(lidar_pcd)
 
     print("Input:", voxel_features.shape)
     print("Voxelized:", voxel_raw.shape)
     print("Output features:", voxel_features.shape)
+    print("Voxel mask:", voxel_mask.shape)
