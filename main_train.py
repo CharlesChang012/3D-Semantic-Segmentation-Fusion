@@ -74,7 +74,8 @@ def main():
     ).to(device)
 
     # Load best model to continue training
-    # model.load_state_dict(torch.load(config['train_params']['best_model_path'], map_location=device))
+    if(config['train_params'].get('train_best_weights', False)):
+        model.load_state_dict(torch.load(config['train_params']['best_model_path'], map_location=device))
 
     # Initialize Optimizer
     if config['train_params']['optimizer'] == 'AdamW':

@@ -20,10 +20,10 @@ class nuScenes(Dataset):
             ## If mini set is not available
             if imageset == 'train' or imageset == 'val':
                 version = 'v1.0-trainval'
-                scenes = splits.train[:3] if imageset == 'train' else splits.val[:3]
+                scenes = splits.train[:5] if imageset == 'train' else splits.val[:5]
             else:
                 version = 'v1.0-test'
-                scenes = splits.test[:3]
+                scenes = splits.test[:5]
         else:
             if imageset == 'train' or imageset == 'val':
                 version = 'v1.0-trainval'
@@ -111,6 +111,7 @@ class nuScenes(Dataset):
         images = []
         cam_sample_tokens = []
         cam_intrinsics = []
+        image_sizes = []
         for i in range(6):
             img, cam_token = self.loadImage(index, i)
             images.append(img)
@@ -118,7 +119,7 @@ class nuScenes(Dataset):
             cam_path, boxes_front_cam, cam_intrinsic = self.nusc.get_sample_data(cam_token)
             cam_intrinsics.append(cam_intrinsic)
 
-        # Use the first camera for calibration (or extend for all cameras if needed)
+        # Use the first camera for calibration (or extend for all cameras if needed)        
         pointsensor = self.nusc.get('sample_data', lidar_sample_token)
         cs_record_lidar = self.nusc.get('calibrated_sensor', pointsensor['calibrated_sensor_token'])
         pose_record_lidar = self.nusc.get('ego_pose', pointsensor['ego_pose_token'])
@@ -155,8 +156,8 @@ class nuScenes(Dataset):
             'lidar_points': pointcloud,     # shape: (P, 4) [x, y, z, intensity]
             'labels': sem_label.astype(np.uint8),
             'num_points': len(pointcloud),
-            'cam_intrinsic': np.array(cam_intrinsics),
-            'lidar2cam_extrinsics': np.array(lidar2cam_list)
+            'cam_intrinsic': np.array(cam_intrinsics), 
+            'lidar2cam_extrinsics': np.array(lidar2cam_list) 
         }
 
         return data_dict
@@ -208,12 +209,14 @@ def fusion_collate_fn(batch):
     # Process images
     num_views = 6
     images_list = []
-    image_sizes = []
+    image_sizes = [] 
     for sample in batch:
         # Convert list of PIL images to tensors and stack along view dimension
         imgs = torch.stack([to_tensor(img) for img in sample['images']], dim=0)  # (6, C, H, W)
         images_list.append(imgs)
-        image_sizes.append(sample['images'][0].size)
+        # PIL.Image.size returns (W, H) — convert to (H, W) to match downstream expectations
+        _, _, H, W = imgs.shape # 900x1600  
+        image_sizes.append((int(H), int(W)))
     images = torch.stack(images_list, dim=0)  # (B, 6, C, H, W)
     image_sizes = torch.tensor(image_sizes, dtype=torch.long)
 
@@ -236,7 +239,7 @@ def fusion_collate_fn(batch):
         labels_padded[i, :P] = labels_list[i]
         valid_mask = (labels_list[i] != 0)   # ignore noise class 0
         mask[i, :P] = valid_mask
-    
+
     return images, image_sizes, lidar_points_padded, labels_padded, mask, cam_intrinsics, lidar2cam_extrinsics
 
 def calculate_class_weights(dataloaders, device, num_classes, print_every=100):

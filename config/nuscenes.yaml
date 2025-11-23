@@ -2,7 +2,7 @@
 format_version: 0.1
 
 ## Global debug flag
-debug: False # If set to True, use mini dataset
+debug: True # If set to True, use mini dataset
 
 ###################
 ## Dataset params
@@ -16,7 +16,7 @@ dataset_params:
   #                 10.900745, 2.1310449, 1.5394714, 1.4620636, 1.4119271]
   class_weights: [5.6544957, 43.08474, 10.936715, 4.01532, 11.036977,
                   20.01939, 10.382197, 27.305088, 9.340371, 4.9004316,
-                  1.0, 10.900745, 2.1310449, 1.5394714, 1.4620636, 1.4119271]  # without noise class weight
+                  1.0, 10.900745, 2.1310449, 1.5394714, 1.4620636, 1.4119271]  # class weight without noise
 
   train_data_loader:
     data_path: "/scratch/eecs442f25_class_root/eecs442f25_class/pohsun/datasets/nuscenes/"
@@ -45,10 +45,11 @@ dataset_params:
 train_params:
 
   # Best model weights
-  best_model_path: "./checkpoints/nuscenes/3DSSF_dinov3/best/3DSSF.pth"
+  train_best_weights: False # If True, load best model weights to continue training
+  best_model_path: "./checkpoints/nuscenes/testOriginalDebug/3DSSF.pth"
 
   # Directory to save checkpoints and logs
-  checkpoint_path: "./checkpoints/nuscenes/testOriginal/"
+  checkpoint_path: "./checkpoints/nuscenes/testOriginalDebug/"
 
   # Feature encoder
   image_encoder: 'dinov3' # [dinov2, dinov3]
@@ -72,4 +73,4 @@ train_params:
 test_params:
 
   # Directory to load model weights
-  checkpoint_path: "./checkpoints/nuscenes/testOriginal/"
+  checkpoint_path: "./checkpoints/nuscenes/testOriginalDebug/"

@@ -149,13 +149,13 @@ class FeatureFusionModel(nn.Module):
             nn.Linear(64, output_dim),
         )
 
-    def forward(self, patch_tokens, voxel_features, voxel_coords, image_sizes, cam_intrinsics, lidar2cam_extrinsics):
+    def forward(self, patch_tokens, voxel_features, voxel_raw, voxel_coords, image_sizes, cam_intrinsics, lidar2cam_extrinsics):
         B, V, _ = voxel_features.shape                  # (B, V, 64)
         _, num_cams, M, dim = patch_tokens.shape        # (B, 6, M, 384)
 
         # 1. Project 3D → 2D
         pixel_coords, _, valid_mask = multi_camera_projector(
-            voxel_coords, cam_intrinsics, lidar2cam_extrinsics, image_sizes
+            voxel_raw[:, : , :3], cam_intrinsics, lidar2cam_extrinsics, image_sizes
         )
 
         origin_sizes = torch.as_tensor(image_sizes, dtype=pixel_coords.dtype, device=self.device)
@@ -195,6 +195,6 @@ class FeatureFusionModel(nn.Module):
    
         fused = torch.cat([voxel_features, fused_img_feat], dim=-1)
         voxel_scores = self.mlp(fused)  # (B, V, C)
-        point_scores, _, _ = self.pcd_encoder.devoxelize(voxel_scores)
+        point_scores, _ = self.pcd_encoder.devoxelize(voxel_scores)
         
         return point_scores

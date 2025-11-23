@@ -168,9 +168,8 @@ class LiDARFeatureEncoder(nn.Module):
             P = point_lengths[b]
             point_scores_padded[b, :P] = point_scores_list[b]
             voxel_indices_padded[b, :P] = voxel_indices_list[b]
-            mask[b, :P] = True
 
-        return point_scores_padded, voxel_indices_padded, mask
+        return point_scores_padded, voxel_indices_padded
 
 
 if __name__ == "__main__":
