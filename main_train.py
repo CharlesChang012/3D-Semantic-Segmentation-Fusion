@@ -87,7 +87,8 @@ def main():
 
     # Initialize Loss function
     class_weights = torch.tensor(config['dataset_params']['class_weights'], dtype=torch.float32, device=device)
-    criterion = CELSLoss(weight=class_weights, ignore_index=0) # Cross-Entropy + Lovasz
+    lamda_lovasz = config['train_params']['lambda_lovasz']
+    criterion = CELSLoss(weight=class_weights, ignore_index=0, lamda_lovasz=lamda_lovasz) # Cross-Entropy + Lovasz
 
     # ==============================#
     #          Training Loop        #

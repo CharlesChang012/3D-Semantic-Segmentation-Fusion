@@ -10,10 +10,11 @@ class CELSLoss(nn.Module):
     Handles masks for padded or missing points robustly.
     weight: class weights for Cross-Entropy 
     """
-    def __init__(self, weight=None, ignore_index=0):
+    def __init__(self, weight=None, ignore_index=0, lamda_lovasz=1.0):
         super().__init__()
         self.ce_loss = nn.CrossEntropyLoss(weight=weight)
         self.ignore_index = ignore_index    # noise class
+        self.lamda_lovasz = lamda_lovasz
 
     def forward(self, pred_scores, gt_labels, mask=None):
         """
@@ -64,6 +65,6 @@ class CELSLoss(nn.Module):
         # Calculate predictions
         predictions = torch.argmax(pred_probs_flat_valid, dim=-1) + 1  # shift back to original labels [1-16]
 
-        total_loss = ce_loss + lovasz_loss
+        total_loss = ce_loss + self.lamda_lovasz * lovasz_loss
 
         return total_loss, ce_loss, lovasz_loss, predictions, gt_labels_flat_valid
