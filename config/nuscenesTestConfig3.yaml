@@ -2,7 +2,7 @@
 format_version: 0.1
 
 ## Global debug flag
-debug: True # If set to True, use mini dataset
+debug: False # If set to True, use mini dataset
 
 ###################
 ## Dataset params
@@ -37,7 +37,7 @@ dataset_params:
     num_workers: 0
 
   lidar:
-    voxel_size: 0.1
+    voxel_size: 0.8
 
 
 ###################
@@ -45,18 +45,19 @@ dataset_params:
 train_params:
 
   # Best model weights
-  best_model_path: "./checkpoints/nuscenes/3DSSF_dinov3/best/3DSSF.pth"
+  train_best_weights: False # If True, load best model weights to continue training
+  best_model_path: "./checkpoints/nuscenes/testConfig3/3DSSF.pth"
 
   # Directory to save checkpoints and logs
-  checkpoint_path: "./checkpoints/nuscenes/testConfig1/"
+  checkpoint_path: "./checkpoints/nuscenes/testConfig3/"
 
   # Feature encoder
   image_encoder: 'dinov3' # [dinov2, dinov3]
 
   # Model params
   mlp_class: 16
-  max_num_epochs: 15
-  learning_rate: 0.005
+  max_num_epochs: 10
+  learning_rate: 0.0025
   optimizer: AdamW # [SGD, Adam, AdamW]
   lr_scheduler: CosineAnnealingLR  # [StepLR, ReduceLROnPlateau, CosineAnnealingLR, CosineAnnealingWarmRestarts]
   momentum: 0.9
@@ -72,4 +73,4 @@ train_params:
 test_params:
 
   # Directory to load model weights
-  checkpoint_path: "./checkpoints/nuscenes/testConfig1/"
+  checkpoint_path: "./checkpoints/nuscenes/testConfig3/"

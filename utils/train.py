@@ -54,7 +54,7 @@ def train_model(dataloaders, image_encoder, pcd_encoder, model, optimizer, crite
                 images, image_sizes, lidar_points, labels, mask, cam_intrinsics, lidar2cam_extrinsics = batch
                 # Move to device
                 images = images.to(device)              # (B, 6, C, H, W)
-                image_sizes = image_sizes.to(device)    # (B, 2)
+                image_sizes = image_sizes.to(device)    # (B, 2) (H, W)
                 lidar_points = lidar_points.to(device)  # (B, max_P, 4)
                 labels = labels.to(device)              # (B, max_P)
                 mask = mask.to(device)                  # (B, max_P)
@@ -80,7 +80,7 @@ def train_model(dataloaders, image_encoder, pcd_encoder, model, optimizer, crite
                     voxel_features, voxel_raw, voxel_coords, voxel_mask = pcd_encoder(lidar_points)  # (B,V,feat_dim), (B,V,4), (B,V,3), (B,V)
 
                     # Forward pass through fusion model
-                    outputs = model(patch_tokens, voxel_features, voxel_coords, image_sizes, cam_intrinsics, lidar2cam_extrinsics)  # (B, V, num_classes)
+                    outputs = model(patch_tokens, voxel_features, voxel_raw, voxel_coords, image_sizes, cam_intrinsics, lidar2cam_extrinsics)  # (B, V, num_classes)
 
                     # Compute loss and predictions using mask
                     total_loss, ce_loss, lovasz_loss, predictions, gt_labels_valid = criterion(outputs, labels, mask=mask)
