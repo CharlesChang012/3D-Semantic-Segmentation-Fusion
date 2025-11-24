@@ -1,0 +1,83 @@
+# Config format schema number
+format_version: 0.1
+
+## Global debug flag
+debug: False # If set to True, use mini dataset
+
+###################
+## Dataset params
+dataset_params:
+  training_size: 1000
+  dataset_type: "point_image_dataset_nus"
+  pc_dataset_type: "nuScenes"
+  label_mapping: "./config/label_mapping/nuscenes.yaml"
+  # class_weights: [1.0643362, 5.6544957, 43.08474, 10.936715, 4.01532, 11.036977,
+  #                 20.01939, 10.382197, 27.305088, 9.340371, 4.9004316, 1.0,
+  #                 10.900745, 2.1310449, 1.5394714, 1.4620636, 1.4119271]
+
+  # without noise class weight
+  # class_weights: [5.6544957, 43.08474, 10.936715, 4.01532, 11.036977,
+  #                 20.01939, 10.382197, 27.305088, 9.340371, 4.9004316,
+  #                 1.0, 10.900745, 2.1310449, 1.5394714, 1.4620636, 1.4119271]  # without noise class weight
+
+  # soft compressed weights
+  class_weights: [5.1309, 12.6169, 6.1873, 4.0153, 6.2074,
+                  8.0039, 6.0764, 9.4610, 5.8681, 4.9004,
+                  1.0, 6.1801, 2.1310, 1.5395, 1.4621, 1.4119]
+
+  train_data_loader:
+    data_path: "/scratch/eecs442f25_class_root/eecs442f25_class/pohsun/datasets/nuscenes/"
+    batch_size: 12
+    shuffle: True
+    num_workers: 0
+
+  val_data_loader:
+    data_path: "/scratch/eecs442f25_class_root/eecs442f25_class/pohsun/datasets/nuscenes/"
+    batch_size: 12
+    shuffle: True
+    num_workers: 0
+
+  test_data_loader:
+    data_path: "/scratch/eecs442f25_class_root/eecs442f25_class/pohsun/datasets/nuscenes/"
+    batch_size: 1
+    shuffle: True
+    num_workers: 0
+
+  lidar:
+    voxel_size: 0.5
+
+
+###################
+## Train params
+train_params:
+
+  # Best model weights
+  train_best_weights: False # If True, load best model weights to continue training
+  best_model_path: "./checkpoints/nuscenes/testConfig5/3DSSF.pth"
+
+  # Directory to save checkpoints and logs
+  checkpoint_path: "./checkpoints/nuscenes/testConfig5/"
+
+  # Feature encoder
+  image_encoder: 'dinov3' # [dinov2, dinov3]
+
+  # Model params
+  mlp_class: 16
+  max_num_epochs: 10
+  learning_rate: 0.0005
+  optimizer: AdamW # [SGD, Adam, AdamW]
+  lr_scheduler: CosineAnnealingLR  # [StepLR, ReduceLROnPlateau, CosineAnnealingLR, CosineAnnealingWarmRestarts]
+  momentum: 0.9
+  nesterov: True
+  weight_decay: 0.005
+
+  lambda_seg2d: 1
+  lambda_xm: 0.05
+  lambda_lovasz: 1
+
+###################
+## Test params
+test_params:
+
+  # Directory to load model weights
+  checkpoint_path: "./checkpoints/nuscenes/testConfig5/"
