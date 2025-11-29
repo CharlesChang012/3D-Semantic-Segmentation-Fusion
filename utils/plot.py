@@ -5,7 +5,7 @@ import plotly
 import plotly.graph_objs as go
 import os
 # Import class names loader
-from utils.dataloader import load_class_names
+from utils.dataloader import load_class_dict
 
 def plot_training_history(train_his, val_his, save_dir=None):
     x = np.arange(len(train_his))
@@ -42,7 +42,9 @@ def plot_cloud(config, points, labels, max_num=100000, save_dir=None):
     Plot point cloud in a normal Python environment with a
     categorical colorbar showing class-label mapping.
     """
-    class_names = load_class_names(config['dataset_params']['label_mapping'], use_16_classes=True)
+    class_dict = load_class_dict(config['dataset_params']['label_mapping'], use_16_classes=True)
+    num_classes = config['train_params']['mlp_class']  # should be 16
+    class_names = [class_dict[i] for i in range(1, num_classes + 1)]
 
     # Random sampling
     inds = np.random.permutation(points.shape[0])[:max_num]
@@ -99,27 +101,70 @@ def plot_cloud(config, points, labels, max_num=100000, save_dir=None):
     plotly.offline.plot(fig, filename=save_path, auto_open=True)
 
 
-def plot_iou_per_class(config, iou_per_class):
+def plot_iou_per_class(config, iou_per_class, save_dir=None):
     """
-    Plots a histogram/bar chart of IoU per class.
-    
-    Args:
-        iou_per_class (Tensor or list): IoU value for each class.
+    Plots a histogram/bar chart of IoU per class with the provided 1-16 class colors.
+    Bars are sorted from highest to lowest IoU.
     """
-    class_names = load_class_names(config['dataset_params']['label_mapping'], use_16_classes=True)
-    iou_values = iou_per_class.cpu().numpy() if hasattr(iou_per_class, "cpu") else iou_per_class
-    num_classes = len(iou_values)
 
-    if class_names is None:
-        x_labels = list(range(num_classes))
-    else:
-        x_labels = class_names
+    # Load class names as dict {0: "name", 1:"name", ...}
+    class_dict = load_class_dict(
+        config['dataset_params']['label_mapping'],
+        use_16_classes=True
+    )
+
+    num_classes = config['train_params']['mlp_class']  # should be 16
+
+    # Convert to ordered list matching class IDs 1→16
+    class_names = [class_dict[i] for i in range(1, num_classes + 1)]
+
+    # Convert tensor to numpy
+    iou_values = (
+        iou_per_class.cpu().numpy()
+        if hasattr(iou_per_class, "cpu")
+        else np.array(iou_per_class)
+    )
+
+    # -------- SORT BY IoU (descending) --------
+    sort_idx = np.argsort(-iou_values)               # highest → lowest
+    iou_values_sorted = iou_values[sort_idx]
+    class_names_sorted = [class_names[i] for i in sort_idx]
+
+    # Reorder colors according to sorted classes
+    colors_sorted = COLOR_MAP[sort_idx]
+
+    # Numeric x positions
+    x = np.arange(num_classes)
 
     plt.figure(figsize=(12, 5))
-    plt.bar(x_labels, iou_values)
     plt.xlabel("Class")
     plt.ylabel("IoU")
-    plt.title("Per-Class IoU")
-    plt.xticks(rotation=45)
+    plt.title("Per-Class IoU (Sorted High → Low)")
+    plt.ylim(0, 1)
+
+    # Draw bars with sorted IoU and sorted colors
+    bars = plt.bar(x, iou_values_sorted, color=colors_sorted)
+
+    # Add IoU value above each bar
+    for idx, b in enumerate(bars):
+        height = b.get_height()
+        plt.text(
+            b.get_x() + b.get_width()/2,
+            height + 0.02,
+            f"{height:.3f}",
+            ha='center',
+            va='bottom',
+            fontsize=9
+        )
+
+    # Sorted x-labels
+    plt.xticks(x, class_names_sorted, rotation=45)
     plt.tight_layout()
+
+    if save_dir is not None:
+        os.makedirs(save_dir, exist_ok=True)
+        save_path = os.path.join(save_dir, "per_class_iou.png")
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Saved IoU plot to: {save_path}")
+
     plt.show()
