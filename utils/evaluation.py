@@ -23,6 +23,7 @@ def evaluate(all_preds, all_labels, num_classes, total_loss, total_correct, tota
     return {
         'loss': total_loss / iteration,
         'overall_acc': total_correct / total_points,
+        'iou_per_class': iou_per_class.tolist(),
         'mean_iou': miou.item(),
         'mean_per_class_acc': mean_acc.item(),
         'precision': precision.item(),

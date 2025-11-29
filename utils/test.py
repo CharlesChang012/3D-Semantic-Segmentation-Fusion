@@ -16,24 +16,23 @@ def test_model(dataloaders, image_encoder, pcd_encoder, model, criterion, device
     model.eval()
 
     total_loss = 0.0
-    total_correct = 0
+    total_corrects = 0
     total_points = 0
-    i = 0
 
     all_preds = []
     all_labels = []
 
     print("🔍 Running test evaluation...")
-    dataloader_tqdm = tqdm(dataloaders['test'], desc="Testing", leave=False)
+    dataloader_tqdm = tqdm(dataloaders['val'], desc="Testing", leave=False)
 
-    for images, image_sizes, lidar_points, labels, mask, cam_intrinsics, cam2lidar_extrinsics in dataloader_tqdm:
-
+    for i, batch in enumerate(dataloader_tqdm):
+        images, image_sizes, lidar_points, labels, mask, cam_intrinsics, lidar2cam_extrinsics = batch
         # Move to device
         images = images.to(device)              # (B, 6, C, H, W)
-        image_sizes = image_sizes.to(device)    # (B, 2)
-        lidar_points = lidar_points.to(device)  # (B, P, 4)
-        labels = labels.to(device)              # (B, P)
-        mask = mask.to(device)                  # (B, P)
+        image_sizes = image_sizes.to(device)    # (B, 2) (H, W)
+        lidar_points = lidar_points.to(device)  # (B, max_P, 4)
+        labels = labels.to(device)              # (B, max_P)
+        mask = mask.to(device)                  # (B, max_P)
 
         B, P, _ = lidar_points.shape
 
@@ -50,43 +49,29 @@ def test_model(dataloaders, image_encoder, pcd_encoder, model, criterion, device
 
         patch_tokens = torch.stack(patch_tokens_list, dim=1)   # (B, 6, M, patch_dim)
         global_tokens = torch.stack(global_tokens_list, dim=1) # (B, 6, patch_dim)
-
-        # -------------------------
-        # Encode LiDAR
-        # -------------------------
-        voxel_features, voxel_raw, voxel_coords, voxel_mask = pcd_encoder(lidar_points)
-
-        # -------------------------
-        # Forward Fusion Model
-        # -------------------------
-        outputs = model(
-            patch_tokens,
-            voxel_features,
-            voxel_coords,
-            image_sizes,
-            cam_intrinsics,
-            cam2lidar_extrinsics
-        )  # (B, P, num_classes)
-
-        # -------------------------
-        # Compute Loss & Predictions
-        # -------------------------
-        total_loss_batch, ce_loss, lovasz_loss, predictions, gt_labels_valid = criterion(outputs, labels, mask=mask)
+        
+        # Point cloud encoder
+        voxel_features, voxel_raw, voxel_coords, voxel_mask = pcd_encoder(lidar_points)  # (B,V,feat_dim), (B,V,4), (B,V,3), (B,V)
+        
+        # Forward pass through fusion model
+        outputs = model(patch_tokens, voxel_features, voxel_raw, voxel_coords, image_sizes, cam_intrinsics, lidar2cam_extrinsics)  # (B, V, num_classes)
+        
+        # Compute loss and predictions using mask
+        combined_loss, ce_loss, lovasz_loss, predictions, gt_labels_valid = criterion(outputs, labels, mask=mask)
 
         # Accumulate stats
-        total_loss += total_loss_batch.item()
-        total_correct += torch.sum(predictions == gt_labels_valid)
+        total_loss += combined_loss.item()
+        total_corrects += torch.sum(predictions == gt_labels_valid)
         total_points += gt_labels_valid.size(0)
-        i += 1
 
         # Save for confusion matrix
-        all_preds.append(predictions.cpu())
-        all_labels.append(gt_labels_valid.cpu())
+        all_preds.append(predictions.detach().cpu())
+        all_labels.append(gt_labels_valid.detach().cpu())
 
         # Update tqdm
         dataloader_tqdm.set_postfix({
-            'Loss': total_loss / i,
-            'Acc': total_correct / total_points
+            'Loss': total_loss / (i + 1),
+            'Acc': total_corrects.double() / total_points
         })
 
     # -------------------------
@@ -98,7 +83,7 @@ def test_model(dataloaders, image_encoder, pcd_encoder, model, criterion, device
 
     num_classes = outputs.shape[-1]
 
-    evaluation_metrics = evaluate(all_preds, all_labels, num_classes, total_loss, total_correct, total_points, i)
+    evaluation_metrics = evaluate(all_preds, all_labels, num_classes, total_loss, total_corrects.double(), total_points, i + 1)
 
     return evaluation_metrics
 
