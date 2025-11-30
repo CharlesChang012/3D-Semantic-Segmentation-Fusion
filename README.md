@@ -24,7 +24,7 @@ By leveraging DINOv3’s enhanced visual embeddings and zero-shot capabilities, 
 $ mkdir <Path/To/dataset/nuscenes>
 $ cd <Path/To/dataset/nuscenes>
 ```
-### 1.2 Mini set
+### 1.2 Mini set (Optional)
 ```bash
 $ wget https://www.nuscenes.org/data/v1.0-mini.tgz
 $ tar -xvzf v1.0-mini.tgz
@@ -40,7 +40,7 @@ $ tar -xvzf v1.0-trainval_meta.tgz
 $ wget -c "https://d36yt3mvayqw5m.cloudfront.net/public/nuscenes-lidarseg-v1.0/nuScenes-lidarseg-all-v1.0.tar.bz2"
 $ tar -xvjf nuScenes-lidarseg-all-v1.0.tar.bz2
 ```
-### 1.4 Test set
+### 1.4 Test set (Optional)
 ```bash
 $ wget -c "https://motional-nuscenes.s3.amazonaws.com/public/v1.0/v1.0-test_blobs.tgz"
 $ tar -xvzf v1.0-test_blobs.tgz

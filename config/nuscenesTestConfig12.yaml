@@ -43,7 +43,7 @@ dataset_params:
     num_workers: 0
 
   test_data_loader:
-    data_path: "/scratch/eecs442f25_class_root/eecs442f25_class/pohsun/datasets/nuscenes/"
+    data_path: "/scratch/engin_root/engin1/pohsun/dataset/nuscenes/"
     batch_size: 1
     shuffle: True
     num_workers: 0

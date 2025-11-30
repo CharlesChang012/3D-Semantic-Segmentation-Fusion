@@ -20,24 +20,28 @@ class nuScenes(Dataset):
             ## If mini set is not available
             if imageset == 'train' or imageset == 'val':
                 version = 'v1.0-trainval'
-                scenes = splits.train[:5] if imageset == 'train' else splits.val[:5]
+                scenes = splits.train[:2] if imageset == 'train' else splits.val[:2]
+                data_path = config['dataset_params']['train_data_loader']['data_path']
             else:
-                version = 'v1.0-test'
-                scenes = splits.test[:5]
+                version = 'v1.0-trainval'
+                scenes = splits.val[:2]
+                data_path = config['dataset_params']['test_data_loader']['data_path']
         else:
             if imageset == 'train' or imageset == 'val':
                 version = 'v1.0-trainval'
                 scenes = splits.train if imageset == 'train' else splits.val
+                data_path = config['dataset_params']['train_data_loader']['data_path']
             else:
-                version = 'v1.0-test'
-                scenes = splits.test
+                version = 'v1.0-trainval'
+                scenes = splits.val
+                data_path = config['dataset_params']['test_data_loader']['data_path']
 
         with open(config['dataset_params']['label_mapping'], 'r') as stream:
             nuscenesyaml = yaml.safe_load(stream)
         self.learning_map = nuscenesyaml['learning_map']
 
         self.num_vote = num_vote
-        self.data_path = config['dataset_params']['train_data_loader']['data_path']
+        self.data_path = data_path
         self.imageset = imageset
         self.img_view = ['CAM_FRONT', 'CAM_FRONT_RIGHT', 'CAM_BACK_RIGHT', 'CAM_BACK', 
                          'CAM_BACK_LEFT', 'CAM_FRONT_LEFT']
@@ -62,12 +66,8 @@ class nuScenes(Dataset):
                                   self.nusc.get('sample_data', lidar_sample_token)['filename'])
         raw_data = np.fromfile(lidar_path, dtype=np.float32).reshape((-1, 5))
 
-        if self.imageset == 'test':
-            annotated_data = np.expand_dims(np.zeros_like(raw_data[:, 0], dtype=int), axis=1)
-        else:
-            lidarseg_path = os.path.join(self.data_path,
-                                         self.nusc.get('lidarseg', lidar_sample_token)['filename'])
-            annotated_data = np.fromfile(lidarseg_path, dtype=np.uint8).reshape((-1, 1))
+        lidarseg_path = os.path.join(self.data_path, self.nusc.get('lidarseg', lidar_sample_token)['filename'])
+        annotated_data = np.fromfile(lidarseg_path, dtype=np.uint8).reshape((-1, 1))
 
         pointcloud = raw_data[:, :4]
         sem_label = annotated_data
@@ -168,8 +168,7 @@ def create_dataloaders(config):
     """
 
     dataloaders = {}
-    # splits = ["train", "val", "test"]
-    splits = ["train", "val"]
+    splits = ["train", "val", "test"]
 
     for split in splits:
         loader_cfg = config['dataset_params'][f"{split}_data_loader"]
@@ -270,7 +269,7 @@ def calculate_class_weights(dataloaders, device, num_classes, print_every=100):
 
     return class_weights.float()
 
-def load_class_names(config_path, use_16_classes=True):
+def load_class_dict(config_path, use_16_classes=True):
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
 
@@ -280,6 +279,6 @@ def load_class_names(config_path, use_16_classes=True):
         class_dict = config["labels"]
 
     # keys from YAML are strings → convert to int
-    class_names = {int(k): v for k, v in class_dict.items() if int(k) != 0}     # ignore label 0 : noise
+    class_dict = {int(k): v for k, v in class_dict.items() if int(k) != 0}     # ignore label 0 : noise
 
-    return class_names
+    return class_dict

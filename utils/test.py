@@ -23,7 +23,7 @@ def test_model(dataloaders, image_encoder, pcd_encoder, model, criterion, device
     all_labels = []
 
     print("🔍 Running test evaluation...")
-    dataloader_tqdm = tqdm(dataloaders['val'], desc="Testing", leave=False)
+    dataloader_tqdm = tqdm(dataloaders['test'], desc="Testing", leave=False)
 
     for i, batch in enumerate(dataloader_tqdm):
         images, image_sizes, lidar_points, labels, mask, cam_intrinsics, lidar2cam_extrinsics = batch
@@ -98,7 +98,7 @@ def test_sample(dataloaders, image_encoder, pcd_encoder, model, criterion, devic
     # 1. Load a single batch
     # ------------------------------------------------
     model.eval()
-    batch = next(iter(dataloaders["train"]))    #TODO: Change back to 'test'
+    batch = next(iter(dataloaders["test"]))
 
     (images,
      image_sizes,

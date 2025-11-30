@@ -30,7 +30,7 @@ def plot_training_history(train_his, val_his, save_dir=None):
 # ---- Point Cloud Visualization ----
 
 COLOR_MAP = np.array([
-    '#ffffff', '#f59664', '#f5e664', '#963c1e', '#b41e50',
+    '#f59664', '#f5e664', '#963c1e', '#b41e50',
     '#ff0000', '#1e1eff', '#c828ff', '#5a1e96', '#ff00ff',
     '#ff96ff', '#4b004b', '#4b00af', '#00c8ff', '#3278ff',
     '#00af00', '#003c87', '#50f096', '#96f0ff', '#0000ff'
@@ -139,7 +139,7 @@ def plot_iou_per_class(config, iou_per_class, save_dir=None):
     plt.figure(figsize=(12, 5))
     plt.xlabel("Class")
     plt.ylabel("IoU")
-    plt.title("Per-Class IoU (Sorted High → Low)")
+    plt.title("Per-Class IoU")
     plt.ylim(0, 1)
 
     # Draw bars with sorted IoU and sorted colors
