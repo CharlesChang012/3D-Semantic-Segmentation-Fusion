@@ -24,7 +24,7 @@ class nuScenes(Dataset):
                 data_path = config['dataset_params']['train_data_loader']['data_path']
             else:
                 version = 'v1.0-trainval'
-                scenes = splits.val[:2]
+                scenes = splits.val[:5]
                 data_path = config['dataset_params']['test_data_loader']['data_path']
         else:
             if imageset == 'train' or imageset == 'val':
@@ -279,6 +279,6 @@ def load_class_dict(config_path, use_16_classes=True):
         class_dict = config["labels"]
 
     # keys from YAML are strings → convert to int
-    class_dict = {int(k): v for k, v in class_dict.items() if int(k) != 0}     # ignore label 0 : noise
+    class_dict = {int(k): v for k, v in class_dict.items()}     # ignore label 0 : noise
 
     return class_dict

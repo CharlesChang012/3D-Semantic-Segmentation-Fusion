@@ -7,6 +7,7 @@ import os
 import copy
 # Import evaluation metrics
 from utils.evaluation import evaluate
+from utils.plot import plot_images_with_point_cloud
 
 @torch.no_grad()
 def test_model(dataloaders, image_encoder, pcd_encoder, model, criterion, device):
@@ -89,24 +90,18 @@ def test_model(dataloaders, image_encoder, pcd_encoder, model, criterion, device
 
 
 @torch.no_grad()
-def test_sample(dataloaders, image_encoder, pcd_encoder, model, criterion, device):
+def test_sample(config, dataloaders, image_encoder, pcd_encoder, model, criterion, device):
     """
     Run forward pass on a single batch from the test set and compute metrics.
     """
 
     # ------------------------------------------------
-    # 1. Load a single batch
+    # Load a single batch
     # ------------------------------------------------
     model.eval()
     batch = next(iter(dataloaders["test"]))
 
-    (images,
-     image_sizes,
-     lidar_points,
-     labels,
-     mask,
-     cam_intrinsics,
-     cam2lidar_extrinsics) = batch
+    images, image_sizes, lidar_points, labels, mask, cam_intrinsics, lidar2cam_extrinsics = batch
 
     # Move tensors to device
     images = images.to(device)
@@ -115,12 +110,12 @@ def test_sample(dataloaders, image_encoder, pcd_encoder, model, criterion, devic
     labels = labels.to(device)
     mask = mask.to(device)
     cam_intrinsics = [c.to(device) for c in cam_intrinsics]
-    cam2lidar_extrinsics = [c.to(device) for c in cam2lidar_extrinsics]
+    lidar2cam_extrinsics = [c.to(device) for c in lidar2cam_extrinsics]
 
     B, P, _ = lidar_points.shape
 
     # ------------------------------------------------
-    # 2. Image encoder (same as your original code)
+    # Image encoder
     # ------------------------------------------------
     patch_tokens_list = []
     global_tokens_list = []
@@ -130,49 +125,50 @@ def test_sample(dataloaders, image_encoder, pcd_encoder, model, criterion, devic
         patch_tokens_list.append(feats["patch_features"])
         global_tokens_list.append(feats["global_features"])
 
-    patch_tokens = torch.stack(patch_tokens_list, dim=1)
-    global_tokens = torch.stack(global_tokens_list, dim=1)
+    patch_tokens = torch.stack(patch_tokens_list, dim=1)   # (B, 6, M, patch_dim)
+    global_tokens = torch.stack(global_tokens_list, dim=1) # (B, 6, patch_dim)
+
+    # Point cloud encoder
+    voxel_features, voxel_raw, voxel_coords, voxel_mask = pcd_encoder(lidar_points)  # (B,V,feat_dim), (B,V,4), (B,V,3), (B,V)
+    
+    # Forward pass through fusion model
+    outputs = model(patch_tokens, voxel_features, voxel_raw, voxel_coords, image_sizes, cam_intrinsics, lidar2cam_extrinsics)  # (B, V, num_classes)
+    
+    # Compute loss and predictions using mask
+    combined_loss, ce_loss, lovasz_loss, predictions, gt_labels_valid = criterion(outputs, labels, mask=mask)
 
     # ------------------------------------------------
-    # 3. Point cloud encoder
-    # ------------------------------------------------
-    voxel_features, voxel_raw, voxel_coords, voxel_mask = pcd_encoder(lidar_points)
-
-    # ------------------------------------------------
-    # 4. Fusion model forward pass
-    # ------------------------------------------------
-    outputs = model(
-        patch_tokens,
-        voxel_features,
-        voxel_coords,
-        image_sizes,
-        cam_intrinsics,
-        cam2lidar_extrinsics
-    )  # (B, P, num_classes)
-
-    # ------------------------------------------------
-    # 5. Loss + predictions using mask
-    # ------------------------------------------------
-    total_loss, ce_loss, lovasz_loss, predictions, gt_labels_valid = criterion(outputs, labels, mask=mask)
-
-    # ------------------------------------------------
-    # 6. Prepare arrays for metrics
+    # Prepare arrays for metrics
     # ------------------------------------------------
     # preds and labels_masked are already masked and flattened
+    valid_mask = mask.bool()  # (B, P)
+    valid_pts = lidar_points[0][valid_mask[0]]          # (N_valid, 4)
     all_preds = predictions.cpu()
     all_labels = gt_labels_valid.cpu()
     num_classes = outputs.shape[-1]
     total_correct = torch.sum(predictions == gt_labels_valid)
     total_points = gt_labels_valid.size(0)
 
-    evaluation_metrics = evaluate(all_preds, all_labels, num_classes, total_loss, total_correct, total_points, 1)
+    evaluation_metrics = evaluate(all_preds, all_labels, num_classes, combined_loss, total_correct.double(), total_points, 1)
 
     scene_data = {
-        "points": lidar_points.cpu().numpy(),
+        "points": valid_pts.cpu().numpy(),
         "predictions": all_preds,
         "labels": all_labels,
     }
 
     evaluation_results = {**evaluation_metrics, **scene_data}
+
+
+    plot_images_with_point_cloud(
+        config=config,
+        images=images, 
+        points=valid_pts, 
+        pred_labels=all_preds,
+        gt_labels=all_labels,
+        cam_intrinsics=cam_intrinsics,
+        lidar2cam_extrinsics=lidar2cam_extrinsics,
+        save_dir=config['test_params']['checkpoint_path']
+    )
 
     return evaluation_results

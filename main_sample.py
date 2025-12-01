@@ -9,7 +9,7 @@ import sys
 from utils.camera import ImageFeatureEncoder
 from utils.lidar import LiDARFeatureEncoder
 from utils.fusion_model import FeatureFusionModel
-from utils.plot import plot_cloud
+from utils.plot import plot_comparison_cloud
 from utils.test import test_sample
 from utils.losses import CELSLoss
 from utils.dataloader import create_dataloaders
@@ -17,18 +17,28 @@ from utils.logger import Logger
 
 def main():
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="config/nuscenes.yaml",
+        help="Path to config YAML file"
+    )
+    args = parser.parse_args()
+
     # ==============================#
     #         Configurations        #
     # ==============================#
     # Load configuration file
-    with open("config/nuscenes.yaml", "r") as f:
+    with open(args.config, "r") as f:
         config = yaml.safe_load(f)
+    print(f"Loaded config from: {args.config}")
 
     # ==============================#
     #             Logger            #
     # ==============================#
-    sys.stdout = Logger(config['train_params']['checkpoint_path'], "test_sample.log")
-    sys.stderr = Logger(config['train_params']['checkpoint_path'], "test_sample.log")
+    # sys.stdout = Logger(config['train_params']['checkpoint_path'], "test_sample.log")
+    # sys.stderr = Logger(config['train_params']['checkpoint_path'], "test_sample.log")
 
     # ==============================#
     #            Set device         #
@@ -65,13 +75,14 @@ def main():
 
     # Initialize Loss function
     class_weights = torch.tensor(config['dataset_params']['class_weights'], dtype=torch.float32, device=device)
-    criterion = CELSLoss(weight=class_weights, ignore_index=-100) # Cross-Entropy + Lovasz
-
+    lamda_lovasz = config['train_params']['lambda_lovasz']
+    criterion = CELSLoss(weight=class_weights, ignore_index=0, lamda_lovasz=lamda_lovasz) # Cross-Entropy + Lovasz
 
     # ==============================#
     #        Test One Sample        #
     # ==============================#
     test_sample_result = test_sample(
+        config=config,
         dataloaders=dataloaders,
         image_encoder=image_encoder,
         pcd_encoder=pcd_encoder,
@@ -80,8 +91,11 @@ def main():
         device=device,
     )
 
-    plot_cloud(config, test_sample_result['points'][0, :, :3], np.array(test_sample_result['predictions']), checkpoint_path=config['test_params']['checkpoint_path'])
-
+    # ==============================#
+    #     Plot PCD Segmentation     #
+    # ==============================#
+    points, pred_labels, gt_labels = test_sample_result['points'][:, :3], np.array(test_sample_result['predictions']), np.array(test_sample_result['labels'])
+    plot_comparison_cloud(config, points, pred_labels, gt_labels, save_dir=config['test_params']['checkpoint_path'])
 
 if __name__ == "__main__":
     main()

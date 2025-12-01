@@ -1,8 +1,11 @@
 import numpy as np
 import torch
+import cv2
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 import plotly
 import plotly.graph_objs as go
+from plotly.subplots import make_subplots
 import os
 # Import class names loader
 from utils.dataloader import load_class_dict
@@ -28,7 +31,6 @@ def plot_training_history(train_his, val_his, save_dir=None):
 
 
 # ---- Point Cloud Visualization ----
-
 COLOR_MAP = np.array([
     '#f59664', '#f5e664', '#963c1e', '#b41e50',
     '#ff0000', '#1e1eff', '#c828ff', '#5a1e96', '#ff00ff',
@@ -37,68 +39,58 @@ COLOR_MAP = np.array([
 ])
 
 
-def plot_cloud(config, points, labels, max_num=100000, save_dir=None):
+def plot_comparison_cloud(config, points, pred_labels, gt_labels, save_dir=None):
     """
-    Plot point cloud in a normal Python environment with a
-    categorical colorbar showing class-label mapping.
+    Visualize prediction vs ground truth side-by-side using Plotly.
     """
+
+    # Class names + colors
     class_dict = load_class_dict(config['dataset_params']['label_mapping'], use_16_classes=True)
-    num_classes = config['train_params']['mlp_class']  # should be 16
-    class_names = [class_dict[i] for i in range(1, num_classes + 1)]
+    num_classes = config['train_params']['mlp_class']
+    class_names = [class_dict[i] for i in range(0, num_classes + 1)]
 
-    # Random sampling
-    inds = np.random.permutation(points.shape[0])[:max_num]
-    points = points[inds]
-    labels = labels[inds]
+    color_pred = COLOR_MAP[pred_labels].tolist()
+    color_gt = COLOR_MAP[gt_labels].tolist()
 
-    # Main 3D scatter plot
-    trace = go.Scatter3d(
-        x=points[:, 0],
-        y=points[:, 1],
-        z=points[:, 2],
+    # ---- Predicted scatter ----
+    pred_trace = go.Scatter3d(
+        x=points[:, 0], y=points[:, 1], z=points[:, 2],
         mode='markers',
-        marker=dict(
-            size=2,
-            opacity=0.8,
-            color=COLOR_MAP[labels].tolist(),
-        ),
-        hovertext=[class_names[int(c)] for c in labels],
-        hoverinfo="text"
+        marker=dict(size=2, opacity=0.8, color=color_pred),
+        hovertext=[class_names[int(c)] for c in pred_labels],
+        hoverinfo="text",
+        name="Prediction"
     )
 
-    # --- Create a dummy scatter to generate a categorical colorbar ---
-    colorbar_trace = go.Scatter(
-        x=[None], y=[None],
-        mode="markers",
-        marker=dict(
-            colorscale=[[i / (len(class_names)-1), COLOR_MAP[i]] for i in class_names],
-            showscale=True,
-            cmin=0,
-            cmax=len(class_names)-1,
-            colorbar=dict(
-                title="Classes",
-                tickvals=list(class_names.keys()),
-                ticktext=[class_names[k] for k in class_names],
-                len=1.0
-            ),
-            color=[0]  # dummy value
-        ),
-        hoverinfo="none"
+    # ---- Ground truth scatter ----
+    gt_trace = go.Scatter3d(
+        x=points[:, 0], y=points[:, 1], z=points[:, 2],
+        mode='markers',
+        marker=dict(size=2, opacity=0.6, color=color_gt),
+        hovertext=[class_names[int(c)] for c in gt_labels],
+        hoverinfo="text",
+        name="Ground Truth"
     )
 
-    layout = go.Layout(
-        margin=dict(l=0, r=200, b=0, t=0),   # extra right margin for colorbar
-        scene=dict(
-            aspectmode='manual',
-            aspectratio=dict(x=1, y=1, z=0.2),
-        )
+    fig = make_subplots(
+        rows=1, cols=2,
+        specs=[[{'type': 'scene'}, {'type': 'scene'}]],
+        subplot_titles=("Ground Truth", "Prediction")
     )
 
-    fig = go.Figure(data=[trace, colorbar_trace], layout=layout)
+    fig.add_trace(gt_trace, row=1, col=1)
+    fig.add_trace(pred_trace, row=1, col=2)
 
-    # Save as standalone HTML
+    fig.update_layout(
+        height=700,
+        width=1400,
+        showlegend=False,
+        margin=dict(l=0, r=0, t=40, b=0)
+    )
+
+    # Save
     save_path = os.path.join(save_dir, "segmentation_result.html")
-    plotly.offline.plot(fig, filename=save_path, auto_open=True)
+    fig.write_html(save_path, auto_open=True)
 
 
 def plot_iou_per_class(config, iou_per_class, save_dir=None):
@@ -168,3 +160,140 @@ def plot_iou_per_class(config, iou_per_class, save_dir=None):
         print(f"Saved IoU plot to: {save_path}")
 
     plt.show()
+
+
+def plot_images_with_point_cloud(
+    config,
+    images,               # Tensor (B, V, C, H, W)
+    points,               # (N_points, 3)
+    pred_labels,          # (N_points,)
+    gt_labels,            # (N_points,)
+    cam_intrinsics,       # (B, V, 3, 3)
+    lidar2cam_extrinsics, # (B, V, 4, 4)
+    save_dir,
+):
+    # Load class names as dict {0: "name", 1:"name", ...}
+    class_dict = load_class_dict(
+        config['dataset_params']['label_mapping'],
+        use_16_classes=True
+    )
+
+    num_classes = config['train_params']['mlp_class']  # should be 16
+    # Convert to ordered list matching class IDs 1→16
+    class_names = [class_dict[i] for i in range(1, num_classes + 1)]
+
+    os.makedirs(save_dir, exist_ok=True)
+
+    B, V, C, H, W = images.shape
+    assert B == 1, "Batch size must be 1 for visualization"
+
+    images_np = images[0].cpu().permute(0, 2, 3, 1).numpy()
+    pts = points.cpu().numpy()
+    pred = pred_labels.cpu().numpy()
+    gt = gt_labels.cpu().numpy()
+
+    # Preconvert hex to RGB
+    COLOR_RGB = {
+        cid: np.array(mcolors.to_rgb(hex_color))  # 0–1 float
+        for cid, hex_color in enumerate(COLOR_MAP)
+    }
+
+    for cam_id in range(V):
+
+        img = images_np[cam_id]  # (H, W, 3)
+        K = cam_intrinsics[0][cam_id].cpu().numpy()
+        T = lidar2cam_extrinsics[0][cam_id].cpu().numpy()
+
+        # ---------------------------------------------
+        # Transform LiDAR to camera
+        # ---------------------------------------------
+        pts_h = np.concatenate([pts[:, :3], np.ones((pts.shape[0], 1))], axis=1)
+        pts_cam = (pts_h @ T.T)[:, :3]
+
+        in_front = pts_cam[:, 2] > 0
+        pts_cam = pts_cam[in_front]
+        pred_cam = pred[in_front]
+        gt_cam   = gt[in_front]
+
+        # ---------------------------------------------
+        # Project to pixels
+        # ---------------------------------------------
+        uv = pts_cam @ K.T
+        uv[:, 0] /= uv[:, 2]
+        uv[:, 1] /= uv[:, 2]
+
+        u = uv[:, 0]
+        v = uv[:, 1]
+
+        mask = (u >= 0) & (u < W) & (v >= 0) & (v < H)
+        u = u[mask]
+        v = v[mask]
+        pred_cam = pred_cam[mask]
+        gt_cam = gt_cam[mask]
+
+        # ---------------------------------------------
+        # Plot side-by-side using Matplotlib
+        # ---------------------------------------------
+        fig, ax = plt.subplots(1, 2, figsize=(14, 6))
+        fig.suptitle(f"Camera {cam_id}", fontsize=18)
+
+        # =======================
+        #   LEFT: Prediction
+        # =======================
+        ax[0].imshow(img)
+        ax[0].set_title("Prediction", fontsize=16)
+        ax[0].axis("off")
+
+        for x, y, lab in zip(u, v, pred_cam):
+            ax[0].scatter(
+                x, y,
+                c=[COLOR_RGB[int(lab)-1]],
+                s=5
+            )
+
+        # =======================
+        #   RIGHT: Ground Truth
+        # =======================
+        ax[1].imshow(img)
+        ax[1].set_title("Ground Truth", fontsize=16)
+        ax[1].axis("off")
+
+        for x, y, lab in zip(u, v, gt_cam):
+            ax[1].scatter(
+                x, y,
+                c=[COLOR_RGB[int(lab)-1]],
+                s=5
+            )
+
+        # ---------------------------------------------
+        # Legend UNDER the two images
+        # ---------------------------------------------
+        handles = []
+        labels = []
+
+        for cid in range(1, num_classes + 1):  # iterate through classes 1..16
+            rgb = COLOR_RGB[cid-1]               # get corresponding RGB color
+
+            handles.append(
+                plt.Line2D([0], [0], marker='o', color=rgb, markersize=8, linewidth=0)
+            )
+            labels.append(class_names[cid-1])     # proper class name
+
+        fig.legend(
+            handles, labels,
+            loc="lower center",
+            ncol=min(8, len(handles)),
+            bbox_to_anchor=(0.5, -0.05),
+            fontsize=12
+        )
+
+        # ---------------------------------------------
+        # Save
+        # ---------------------------------------------
+        save_path = os.path.join(save_dir, f"cam_{cam_id}_prediction.png")
+        plt.tight_layout()
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+
+    print(f"Saved camera projection images to {save_dir}")
+
