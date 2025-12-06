@@ -151,7 +151,8 @@ class FeatureFusionModel(nn.Module):
 
     def forward(self, patch_tokens, voxel_features, voxel_raw, voxel_coords, image_sizes, cam_intrinsics, lidar2cam_extrinsics):
         B, V, _ = voxel_features.shape                  # (B, V, 64)
-        _, num_cams, M, dim = patch_tokens.shape        # (B, 6, M, 384)
+        B2, num_cams, M, dim = patch_tokens.shape       # (B, 6, M, 384)
+        print("B2:", B2, "num_cams:", num_cams, "M:", M, "dim:", dim)
 
         # 1. Project 3D → 2D
         pixel_coords, _, valid_mask = multi_camera_projector(
@@ -162,15 +163,21 @@ class FeatureFusionModel(nn.Module):
         pixel_coords = scale_pixel_coords(
             pixel_coords,
             origin_sizes,
-            (self.image_encoder.resize_size, self.image_encoder.resize_size)
+            # (self.image_encoder.resize_size, self.image_encoder.resize_size)
+            (self.image_encoder.resize_height, self.image_encoder.resize_width)
         )
 
-        grid_size = self.image_encoder.resize_size // self.image_encoder.patch_size
-        total_patches = grid_size * grid_size
+        # grid_size = self.image_encoder.resize_size // self.image_encoder.patch_size
+        # total_patches = grid_size * grid_size
+        grid_h = self.image_encoder.resize_height // self.image_encoder.patch_size   # 640 / 16 = 40
+        grid_w = self.image_encoder.resize_width  // self.image_encoder.patch_size   # 1138 / 16 = 71
+        total_patches = grid_h * grid_w  # 40 * 71 = 2840
 
         patch_xy = (pixel_coords / float(self.image_encoder.patch_size)).long()
-        patch_xy[..., 0] = patch_xy[..., 0].clamp(0, grid_size - 1)
-        patch_xy[..., 1] = patch_xy[..., 1].clamp(0, grid_size - 1)
+        # patch_xy[..., 0] = patch_xy[..., 0].clamp(0, grid_size - 1)
+        # patch_xy[..., 1] = patch_xy[..., 1].clamp(0, grid_size - 1)
+        patch_xy[..., 0] = patch_xy[..., 0].clamp(0, grid_w - 1)
+        patch_xy[..., 1] = patch_xy[..., 1].clamp(0, grid_h - 1)
 
         point_patch_tokens = []
 
@@ -178,7 +185,7 @@ class FeatureFusionModel(nn.Module):
             tokens = patch_tokens[:, cam].to(self.device)               # (B, M, dim)
             idx_uv = patch_xy[:, cam].to(self.device)                   # (B, V, 2)
 
-            flat_idx = (idx_uv[..., 1] * grid_size + idx_uv[..., 0]).clamp(0, total_patches - 1)
+            flat_idx = (idx_uv[..., 1] * grid_w + idx_uv[..., 0]).clamp(0, total_patches - 1)
             gather_idx = flat_idx.unsqueeze(-1).expand(-1, -1, dim)     # (B, V, dim)
             gathered = torch.gather(tokens, dim=1, index=gather_idx)    # (B, V, dim)
             point_patch_tokens.append(gathered)
