@@ -20,11 +20,11 @@ class nuScenes(Dataset):
             ## If mini set is not available
             if imageset == 'train' or imageset == 'val':
                 version = 'v1.0-trainval'
-                scenes = splits.train[:2] if imageset == 'train' else splits.val[:2]
+                scenes = splits.train[:2] if imageset == 'train' else splits.val[:1]
                 data_path = config['dataset_params']['train_data_loader']['data_path']
             else:
                 version = 'v1.0-trainval'
-                scenes = splits.val[:5]
+                scenes = splits.val[4:7]
                 data_path = config['dataset_params']['test_data_loader']['data_path']
         else:
             if imageset == 'train' or imageset == 'val':
@@ -168,7 +168,7 @@ def create_dataloaders(config):
     """
 
     dataloaders = {}
-    splits = ["train", "val", "test"]
+    splits = ["train", "val"]
 
     for split in splits:
         loader_cfg = config['dataset_params'][f"{split}_data_loader"]
