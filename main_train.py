@@ -10,7 +10,7 @@ from utils.camera import ImageFeatureEncoder
 from utils.lidar import LiDARFeatureEncoder
 from utils.fusion_model import FeatureFusionModel
 from utils.train import train_model
-from utils.plot import plot_training_history, plot_cloud
+from utils.plot import plot_training_history
 from utils.losses import CELSLoss
 from utils.dataloader import create_dataloaders, calculate_class_weights
 from utils.logger import Logger
