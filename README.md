@@ -6,16 +6,17 @@ Building on the Stanford 3D segmentation framework [1], this project integrates 
 
 By leveraging DINOv3’s enhanced visual embeddings and zero-shot capabilities, the system aims to achieve **more accurate, generalizable, and efficient 3D semantic mapping**.
 
-
 ## Key Highlights
 - Fusion of **LiDAR (PTv3)** [5] and **image (DINOv3 or DINOv2)** features
 - Evaluated on **nuScenes-Lidarseg** for real-world driving scenes  
 - Includes **PointTransformerV3** integration and flexible feature fusion design
 
+![Model Architecture](./media/architecture.png)
+
 ## Components
 - **3D Backbone:** PointTransformerV3 (LiDAR feature encoder)  
-- **2D Backbone:** DINOv3 ViT-L/16 or DINOv2 (visual feature extractor)  
-- **Fusion Module:** MLP or projection-based cross-modal fusion  
+- **2D Backbone:** DINOv3 ViT-S/16 or DINOv2 (visual feature extractor)  
+- **Fusion Module:** projection-based cross-modal MLP fusion  
 - **Training:** Cross-Entropy + Lovasz-Softmax loss for per-class IoU optimization
 
 ## 1. Download dataset
@@ -41,11 +42,9 @@ $ wget -c "https://d36yt3mvayqw5m.cloudfront.net/public/nuscenes-lidarseg-v1.0/n
 $ tar -xvjf nuScenes-lidarseg-all-v1.0.tar.bz2
 ```
 ### 1.4 Test set (Optional)
+Use one of the train-val set as test set (label provided).
 ```bash
-$ wget -c "https://motional-nuscenes.s3.amazonaws.com/public/v1.0/v1.0-test_blobs.tgz"
-$ tar -xvzf v1.0-test_blobs.tgz
-$ wget -c "https://d36yt3mvayqw5m.cloudfront.net/public/v1.0/v1.0-test_meta.tgz"
-$ tar -xvzf v1.0-test_meta.tgz
+$ wget -c "ttps://motional-nuscenes.s3.amazonaws.com/public/v1.0/v1.0-trainval02_blobs.tgz"
 ```
 
 ## 2. Setup Guide
@@ -57,7 +56,7 @@ $ cd 3D-Semantic-Segmentation-Fusion
 $ git submodule update --init --recursive
 ```
 
-### 2.2. Launch an Interactive GPU Session if using UMich HPC [6] (Skip to [Step 4](#4-create-the-conda-environment) if using local machine)
+### 2.2. Launch an Interactive GPU Session if using UMich HPC [6] (Skip to [Step 2.4](###2.4-create-the-conda-environment) if using local machine)
 Start a GPU session (see [UMich documentation](https://documentation.its.umich.edu/node/5078)):  
 ```bash
 $ salloc --account=<account> \   
@@ -105,6 +104,20 @@ $ cd PointTransformerV3/Pointcept/libs/pointops/
 $ python setup.py install
 ```
 
+## 3. Train the model
+```bash
+$ python main_train.py
+```
+
+## 4. Test model on test set
+```bash
+$ python main_test.py
+```
+
+## 5. Test model on a single test sample
+```bash
+$ python main_sample.py
+```
 ---
 
 ## 📚 References

@@ -238,13 +238,12 @@ def plot_images_with_point_cloud(
         fig.suptitle(f"Camera {cam_id}", fontsize=18)
 
         # =======================
-        #   LEFT: Prediction
+        #   LEFT: Ground Truth
         # =======================
         ax[0].imshow(img)
-        ax[0].set_title("Prediction", fontsize=16)
+        ax[0].set_title("Ground Truth", fontsize=16)
         ax[0].axis("off")
-
-        for x, y, lab in zip(u, v, pred_cam):
+        for x, y, lab in zip(u, v, gt_cam):
             ax[0].scatter(
                 x, y,
                 c=[COLOR_RGB[int(lab)-1]],
@@ -252,13 +251,13 @@ def plot_images_with_point_cloud(
             )
 
         # =======================
-        #   RIGHT: Ground Truth
+        #   RIGHT: Prediction
         # =======================
         ax[1].imshow(img)
-        ax[1].set_title("Ground Truth", fontsize=16)
+        ax[1].set_title("Prediction", fontsize=16)
         ax[1].axis("off")
 
-        for x, y, lab in zip(u, v, gt_cam):
+        for x, y, lab in zip(u, v, pred_cam):
             ax[1].scatter(
                 x, y,
                 c=[COLOR_RGB[int(lab)-1]],
