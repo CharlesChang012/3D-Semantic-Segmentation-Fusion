@@ -54,7 +54,7 @@ wget -c "ttps://motional-nuscenes.s3.amazonaws.com/public/v1.0/v1.0-trainval02_b
 git clone --recursive git@github.com:CharlesChang012/3D-Semantic-Segmentation-Fusion.git
 ```
 
-### 2.2. Launch an Interactive GPU Session if using UMich HPC [6] (Skip to [Step 2.4](###2.4-create-the-conda-environment) if using local machine)
+### 2.2. Launch an Interactive GPU Session if using UMich HPC [6] (Skip to [Step 2.4](#24-create-the-conda-environment) if using local machine)
 Start a GPU session (see [UMich documentation](https://documentation.its.umich.edu/node/5078)):  
 ```bash
 salloc --account=<account> \   
