@@ -56,7 +56,7 @@ $ cd 3D-Semantic-Segmentation-Fusion
 $ git submodule update --init --recursive
 ```
 
-### 2.2. Launch an Interactive GPU Session if using UMich HPC [6] (Skip to [Step 2.4](###2.4-create-the-conda-environment) if using local machine)
+### 2.2. Launch an Interactive GPU Session if using UMich HPC [6] (Skip to [Step 2.4](#24-create-the-conda-environment) if using local machine)
 Start a GPU session (see [UMich documentation](https://documentation.its.umich.edu/node/5078)):  
 ```bash
 $ salloc --account=<account> \   
