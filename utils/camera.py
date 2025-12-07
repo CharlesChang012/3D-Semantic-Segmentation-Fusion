@@ -14,16 +14,31 @@ class ImageFeatureEncoder:
         
         if self.model_name == "dinov2":
             model_id = "facebook/dinov2-small"
+            self.processor = AutoImageProcessor.from_pretrained(model_id, use_fast=True)
             self.patch_size = 14
+            self.resize_size = 224
+
         elif self.model_name == "dinov3":
             model_id = "facebook/dinov3-vits16-pretrain-lvd1689m"
+            self.processor = AutoImageProcessor.from_pretrained(model_id, use_fast=True)
             self.patch_size = 16
+
+            # # Override default 224×224
+            self.processor.size = {"height": 640, "width": 1138}
+            self.processor.do_center_crop = False
+            self.processor.do_resize = True
+
+            # self.patch_size = 16
+            # self.resize_size = self.processor.size["height"]
+            self.resize_height = self.processor.size["height"]
+            self.resize_width = self.processor.size["width"]
+
         else:
             raise ValueError(f"Unsupported model name: {self.model_name}")
 
         # Preprocessor and model
-        self.processor = AutoImageProcessor.from_pretrained(model_id, use_fast=True)
-        self.resize_size = self.processor.size["height"]
+        # self.processor = AutoImageProcessor.from_pretrained(model_id, use_fast=True)
+        # self.resize_size = self.processor.size["height"]
         self.model = AutoModel.from_pretrained(model_id).to(self.device)
         self.model.eval()
 
