@@ -1,4 +1,4 @@
-name: 3DSSF
+name: eecs442
 channels:
   - pyg
   - pytorch
@@ -169,7 +169,6 @@ dependencies:
   - readline=8.3=hc2a1206_0
   - requests=2.32.5=py310h06a4308_0
   - scipy=1.15.2=py310h1d65ade_0
-  - setuptools=73.0.1=pyhd8ed1ab_0
   - sharedarray=3.2.4=py310hf779ad0_3
   - sqlite=3.50.2=hb25bd0a_1
   - sympy=1.14.0=py310h06a4308_0
@@ -207,38 +206,54 @@ dependencies:
   - zlib-ng=2.2.5=hde8ca8f_0
   - zstd=1.5.7=h11fc155_0
   - pip:
+      - abnf==2.2.0
       - accelerate==1.11.0
       - aiohappyeyeballs==2.6.1
       - aiohttp==3.13.1
       - aiosignal==1.4.0
+      - annotated-types==0.7.0
       - anyio==4.11.0
       - asttokens==3.0.0
       - async-timeout==5.0.1
       - attrs==25.4.0
+      - backoff==2.2.1
       - blinker==1.9.0
+      - cachetools==6.2.2
       - ccimport==0.4.4
+      - chardet==5.2.0
+      - cint==1.0.0
       - click==8.3.0
       - comm==0.2.3
       - configargparse==1.7.1
       - contourpy==1.3.2
+      - cryptography==46.0.3
       - cumm-cu121==0.7.11
       - cycler==0.12.1
       - dash==3.2.0
       - decorator==5.2.1
+      - descartes==1.1.0
+      - diskcache==5.6.3
+      - eval-type-backport==0.3.0
       - exceptiongroup==1.3.0
       - executing==2.2.1
       - fastjsonschema==2.21.2
+      - fickling==0.1.5
       - fire==0.7.1
       - flash-attn==2.5.9.post1
       - flask==3.1.2
       - fonttools==4.60.1
       - frozenlist==1.8.0
       - fsspec==2025.9.0
+      - gitdb==4.0.12
+      - gitpython==3.1.45
+      - gql==4.0.0
+      - graphql-core==3.2.7
       - h11==0.16.0
       - hf-xet==1.2.0
       - httpcore==1.0.9
       - httpx==0.28.1
       - huggingface-hub==0.36.0
+      - intervaltree==3.1.0
       - ipython==8.37.0
       - ipywidgets==8.1.7
       - itsdangerous==2.2.0
@@ -248,6 +263,7 @@ dependencies:
       - jsonschema-specifications==2025.9.1
       - jupyter-core==5.9.1
       - jupyterlab-widgets==3.0.15
+      - kaitaistruct==0.11
       - kiwisolver==1.4.9
       - lark==1.3.1
       - lightning-utilities==0.15.2
@@ -258,13 +274,18 @@ dependencies:
       - nbformat==5.10.4
       - nest-asyncio==1.6.0
       - ninja==1.13.0
+      - nuscenes-devkit==1.2.0
       - open3d==0.18.0
+      - opencv-python-headless==4.11.0.86
       - pandas==2.3.3
+      - parameterized==0.9.0
       - parso==0.8.5
       - pccm==0.4.16
+      - pdfminer-six==20250506
       - pexpect==4.9.0
       - plotly==6.3.1
-      # - pointops==1.0
+      # - pointops==1.0         # IGNORE: install from source
+      - polyfile-weave==0.5.7
       - portalocker==3.2.0
       - prompt-toolkit==3.0.52
       - propcache==0.4.1
@@ -272,22 +293,34 @@ dependencies:
       - ptyprocess==0.7.0
       - pure-eval==0.2.3
       - pybind11==3.0.1
+      - pycocotools==2.0.10
+      - pydantic==2.12.4
+      - pydantic-core==2.41.5
       - pygments==2.19.2
       - pyparsing==3.2.5
       - pyquaternion==0.9.9
       - python-dateutil==2.9.0.post0
+      - python-graphviz==0.21
       - pytz==2025.2
       - referencing==0.37.0
       - regex==2025.10.23
+      - requests-toolbelt==1.0.0
       - retrying==1.4.2
       - rpds-py==0.28.0
       - safetensors==0.6.2
       - scikit-learn==1.7.2
+      - sentry-sdk==2.45.0
+      - setuptools==80.9.0
+      - shapely==2.0.7
       - shellingham==1.5.4
       - six==1.17.0
+      - smmap==5.0.2
       - sniffio==1.3.1
+      - sortedcontainers==2.4.0
       - spconv-cu121==2.3.8
       - stack-data==0.6.3
+      - stdlib-list==0.11.1
+      - tenacity==9.1.2
       - threadpoolctl==3.6.0
       - timm==0.9.12
       - tokenizers==0.22.1
@@ -298,8 +331,11 @@ dependencies:
       - transformers==4.57.1
       - triton==3.3.1
       - typer-slim==0.20.0
+      - typing-inspection==0.4.2
       - tzdata==2025.2
+      - wandb==0.23.0
       - wcwidth==0.2.14
+      - weave==0.52.17
       - wget==3.2
       - widgetsnbextension==4.0.14
       - xxhash==3.6.0
