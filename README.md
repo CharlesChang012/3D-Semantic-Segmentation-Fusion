@@ -22,101 +22,94 @@ By leveraging DINOv3’s enhanced visual embeddings and zero-shot capabilities, 
 ## 1. Download dataset
 ### 1.1 Make directory for dataset
 ```bash
-$ mkdir <Path/To/dataset/nuscenes>
-$ cd <Path/To/dataset/nuscenes>
+mkdir <Path/To/dataset/nuscenes>
+cd <Path/To/dataset/nuscenes>
 ```
 ### 1.2 Mini set (Optional)
 ```bash
-$ wget https://www.nuscenes.org/data/v1.0-mini.tgz
-$ tar -xvzf v1.0-mini.tgz
-$ wget https://www.nuscenes.org/data/nuScenes-lidarseg-mini-v1.0.tar.bz2   
-$ tar -xvjf nuScenes-lidarseg-mini-v1.0.tar.bz2
+wget https://www.nuscenes.org/data/v1.0-mini.tgz
+tar -xvzf v1.0-mini.tgz
+wget https://www.nuscenes.org/data/nuScenes-lidarseg-mini-v1.0.tar.bz2   
+tar -xvjf nuScenes-lidarseg-mini-v1.0.tar.bz2
 ```
 ### 1.3 Training set
 ```bash
-$ wget -c "https://motional-nuscenes.s3.amazonaws.com/public/v1.0/v1.0-trainval01_blobs.tgz"
-$ tar -xvzf v1.0-trainval01_blobs.tgz
-$ wget -c "https://motional-nuscenes.s3.amazonaws.com/public/v1.0/v1.0-trainval_meta.tgz"
-$ tar -xvzf v1.0-trainval_meta.tgz
-$ wget -c "https://d36yt3mvayqw5m.cloudfront.net/public/nuscenes-lidarseg-v1.0/nuScenes-lidarseg-all-v1.0.tar.bz2"
-$ tar -xvjf nuScenes-lidarseg-all-v1.0.tar.bz2
+wget -c "https://motional-nuscenes.s3.amazonaws.com/public/v1.0/v1.0-trainval01_blobs.tgz"
+tar -xvzf v1.0-trainval01_blobs.tgz
+wget -c "https://motional-nuscenes.s3.amazonaws.com/public/v1.0/v1.0-trainval_meta.tgz"
+tar -xvzf v1.0-trainval_meta.tgz
+wget -c "https://d36yt3mvayqw5m.cloudfront.net/public/nuscenes-lidarseg-v1.0/nuScenes-lidarseg-all-v1.0.tar.bz2"
+tar -xvjf nuScenes-lidarseg-all-v1.0.tar.bz2
 ```
 ### 1.4 Test set (Optional)
 Use one of the train-val set as test set (label provided).
 ```bash
-$ wget -c "ttps://motional-nuscenes.s3.amazonaws.com/public/v1.0/v1.0-trainval02_blobs.tgz"
+wget -c "ttps://motional-nuscenes.s3.amazonaws.com/public/v1.0/v1.0-trainval02_blobs.tgz"
 ```
 
 ## 2. Setup Guide
 
 ### 2.1 Clone the Repository and Initialize Submodules
 ```bash
-$ git clone git@github.com:CharlesChang012/3D-Semantic-Segmentation-Fusion.git
-$ cd 3D-Semantic-Segmentation-Fusion
-$ git submodule update --init --recursive
+git clone --recursive git@github.com:CharlesChang012/3D-Semantic-Segmentation-Fusion.git
 ```
 
 ### 2.2. Launch an Interactive GPU Session if using UMich HPC [6] (Skip to [Step 2.4](###2.4-create-the-conda-environment) if using local machine)
 Start a GPU session (see [UMich documentation](https://documentation.its.umich.edu/node/5078)):  
 ```bash
-$ salloc --account=<account> \   
-        --partition=spgpu,gpu_mig40 \  
-        --nodes=1 \
-        --ntasks=1 \  
-        --cpus-per-task=4 \      
-        --gpus=1 \ 
-        --mem=16G \   
-        --time=01:00:00
+salloc --account=<account> \   
+       --partition=spgpu,gpu_mig40 \  
+       --nodes=1 \
+       --ntasks=1 \  
+       --cpus-per-task=4 \      
+       --gpus=1 \ 
+       --mem=16G \   
+       --time=01:00:00
 ```
 
 **Helper commands:**
 - Check available accounts:
   ```bash
-  $ my_accounts
+  my_accounts
   ```
 - Monitor active jobs:
   ```bash
-  $ watch squeue --me
+  watch squeue --me
   ```
 
 ### 2.3 Load GPU and Compiler
 ```bash
-$ module load cuda/12.1.1
-$ module load gcc/11.2.0
-$ nvcc --version
+module load cuda/12.1.1
+module load gcc/11.2.0
+nvcc --version
 ```
 
 ### 2.4 Create the Conda Environment
 ```bash
-$ cd 3D-Semantic-Segmentation-Fusion
-$ conda env create -f environment.yml
-$ conda activate 3DSSF
+cd 3D-Semantic-Segmentation-Fusion
+conda env create -f environment.yml
+conda activate 3DSSF
 ```
 
-### 2.5 Install NuScenes Devkit
+### 2.5 Build PointOps from PointTransformerV3 Source
 ```bash
-$ pip install nuscenes-devkit &> /dev/null
-```
-
-### 2.6 Build PointOps from PointTransformerV3 Source
-```bash
-$ cd PointTransformerV3/Pointcept/libs/pointops/
-$ python setup.py install
+cd PointTransformerV3/Pointcept/libs/pointops/
+python setup.py install
 ```
 
 ## 3. Train the model
 ```bash
-$ python main_train.py
+python main_train.py
 ```
 
 ## 4. Test model on test set
 ```bash
-$ python main_test.py
+python main_test.py
 ```
 
 ## 5. Test model on a single test sample
 ```bash
-$ python main_sample.py
+python main_sample.py
 ```
 ---
 
