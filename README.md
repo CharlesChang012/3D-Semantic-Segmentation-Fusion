@@ -114,8 +114,8 @@ python main_sample.py
 ---
 
 ## 📚 References
-[1] Stanford 3D Semantic Segmentation Framework  
-[2] Oquab et al., *DINOv3: Self-Supervised Vision Transformers with Masked Image Modeling*, Meta AI, 2023  
+[1] Anze Liu, 3D Semantic Segmentation with 3D LiDAR Point Clouds and 2D Camera Images for Autonomous Driving, Standford  
+[2] Oquab et al., *DINOv3: Self-Supervised Vision Transformers with Masked Image Modeling*, Meta AI, 2025  
 [3] Oquab et al., *DINOv2: Learning Robust Visual Features without Supervision*, Meta AI, 2023  
 [4] Caesar et al., *nuScenes: A Multimodal Dataset for Autonomous Driving*, CVPR 2020  
 [5] Wu et al., *Point Transformer V3: Simplicity, Efficiency, and Performance in Point Cloud Transformers*, arXiv 2024  
